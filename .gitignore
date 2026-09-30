@@ -1,0 +1,36 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Локальные данные и секреты (правило 5: секреты не в git)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+forge.toml
+.forge/
+*.sqlite
+*.sqlite.bz2
+sde-*.sqlite
+
+# Сгенерированные отчёты по стройкам (личные игровые/финансовые данные, не код;
+# index.html тоже пишется кодом — см. report.py::_write_index_html).
+reports/
+
+# IDE
+.vscode/
+.idea/
+
+# Пульт (forge.desktop): лог необработанных ошибок; состояние (корзина, окно) — в .forge/
+forge_desktop.log
+
+# Переносная сборка (tools/build_portable.py): кэш embeddable Python и результат
+.build/

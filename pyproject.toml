@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge"
+version = "3.0.0"
+description = "Local industry assistant for EVE Online: exact materials, real build cost, schedule, what to build"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Kalaratri Omanid" }]
+keywords = ["eve-online", "eve", "industry", "esi", "manufacturing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Games/Entertainment",
+    "Natural Language :: Russian",
+    "Natural Language :: English",
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.6",
+    "typer>=0.12",
+    "keyring>=24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.16",
+    "mypy>=1.13",
+]
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "tomli-w>=1.0",
+]
+# Десктопный пульт (forge.desktop): только базовые модули Qt (QtCore/QtGui/QtWidgets/QtSvg/
+# QtNetwork). Отчёты по стройкам открываются в браузере — их отдаёт встроенный
+# в пульт локальный сервер из extra [web], поэтому [desktop] тянет и его.
+desktop = [
+    "PySide6-Essentials>=6.10",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "tomli-w>=1.0",
+]
+
+[project.scripts]
+forge = "forge.interface.cli:app"
+
+[project.gui-scripts]
+forge-desktop = "forge.desktop.app:main"
+
+[tool.setuptools.packages.find]
+include = ["forge*"]
+
+[tool.setuptools.package-data]
+"forge.desktop" = ["assets/*.svg", "assets/*.ico", "assets/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "B", "UP", "I", "RUF", "DTZ", "S", "PYI", "PLR1"]
+# "E" (pycodestyle) excluded — E501 (line length) and E402/E702/E731/E741 fire on this
+# codebase's own established style (long Russian docstrings, a deliberate stdout/stderr
+# UTF-8 reconfig above the import block in cli.py) with no correctness value.
+ignore = [
+    "S101",    # asserts are fine (used in code, not just tests)
+    # RUF001-003: "ambiguous unicode" flags Cyrillic in docstrings/comments/strings — this
+    # codebase is written in Russian, so every Cyrillic character trips it. No signal here.
+    "RUF001", "RUF002", "RUF003",
+    # S608: every hit is conn.execute(sql_with_fstring, params) where the f-string only
+    # builds a "?, ?, ?" placeholder count or a local constant (never a raw value) and real
+    # values always go through the parameterized tuple — verified across all 24 occurrences
+    # (core/blueprint.py, bom.py, prices.py, rigs.py, stock.py, ingest/sde.py,
+    # planner/schedule.py, timing.py). Same safe pattern throughout, not an injection risk.
+    "S608",
+    # DTZ005: local-only tool, no timezone handling anywhere by design — every "now" is the
+    # player's own wall clock (job start/end times, report timestamps).
+    "DTZ005",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# N_("…") лишь помечает строку для словаря перевода (forge.i18n) и возвращает её же —
+# значение по умолчанию остаётся неизменяемой строкой.
+extend-immutable-calls = ["forge.i18n.N_", "forge.desktop.widgets.N_"]
+
+[tool.ruff.lint.per-file-ignores]
+"forge/interface/cli.py" = ["B008"]  # typer.Option()/typer.Argument() as defaults is the typer API
+"tests/*" = ["S101", "S105", "S106", "DTZ"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+exclude = ["^tests/"]

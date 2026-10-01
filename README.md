@@ -25,6 +25,7 @@ used only to sync data from the official EVE servers. Interface in English and R
 bonuses.</sub>
 
 **Contents:** [Installation](#installation) · [First run](#first-run) ·
+[Step-by-step setup guide](docs/SETUP.md) ·
 [How Forge calculates](#how-forge-calculates) · [The program, tab by tab](#the-program-tab-by-tab) ·
 [Settings](#settings) · [Configuration file](#configuration-file) · [Command line](#command-line) ·
 [Data and privacy](#data-and-privacy) · [Development](#development)
@@ -85,6 +86,10 @@ Start the panel with `Forge.cmd` (no console window) or `forge desktop`. Desktop
    and freight.
 
 Then use **Calculator** for any blueprint and **What to build** for ideas.
+
+A detailed walkthrough — adding characters, choosing your buy/sell/build locations, setting up
+stations with rigs, market structures, freight, roles and stock — is in the
+**[step-by-step setup guide](docs/SETUP.md)**.
 
 ## How Forge calculates
 

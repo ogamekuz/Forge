@@ -9,4 +9,6 @@
 ``core``/``recommend``/``planner`` НИКОГДА не импортируют ``ingest``, ``sync`` или сеть.
 """
 
-__version__ = "0.1.0"
+# Версия Forge — здесь и в pyproject.toml (``tests/test_version.py`` следит, чтобы совпадали).
+# Пульт показывает её на вывеске (``desktop/branding.VERSION``), сборка кладёт в имя архива.
+__version__ = "3.1.0"

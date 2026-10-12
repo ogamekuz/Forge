@@ -1,5 +1,5 @@
 """Главное окно пульта Forge: шапка (логотип, название, флаг автора — корпорация и альянс, «Поддержать»,
-статусы, язык RUS/ENG), вкладки-сегменты, страницы.
+статусы, язык RUS/ENG, тема оформления), вкладки-сегменты, страницы.
 
 Каркас: статус (синк, данные, сервер отчётов) собирается
 раз в 3 с в фоне — StatusHub раздаёт его страницам сигналом; сами проверки UI не блокируют.
@@ -10,11 +10,14 @@
 вкладки и страницы на месте (``_build_ui``): тексты берутся через ``tr()`` при постройке, так что
 новый язык виден сразу, без перезапуска. Остаются корзина (``basket``), хаб статуса, сервис и
 сервер отчётов; несохранённые правки на вкладках при смене языка теряются.
+
+Тема оформления (``themes``) — из ``[ui] theme``. Кнопка-палитра в шапке открывает окно «Тема» с
+предпросмотром; выбранная тема применяется так же, на месте: приложение перекрашивается
+(``theme.apply``), а окно пересобирается — цвета виджеты берут при постройке.
 """
 
 from __future__ import annotations
 
-import ctypes
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +25,7 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray, QObject, QSettings, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -33,8 +37,9 @@ from PySide6.QtWidgets import (
 from .. import config as config_mod
 from .. import i18n
 from ..web.service import ForgeService
-from . import branding, theme
+from . import branding, theme, themes
 from .donate import DonateDialog
+from .icons import TypeIcons
 from .server import ReportServer
 from .state import BasketOptions, BasketState
 from .widgets import (
@@ -46,6 +51,7 @@ from .widgets import (
     Logo,
     Pill,
     Segmented,
+    button,
     err_text,
     fade_in,
     label,
@@ -100,12 +106,14 @@ def _age(iso: str | None) -> str:
     return tr("{n} дн назад", n=int(mins // 1440))
 
 
-def _config_lang(config_path: str) -> str:
-    """Язык из ``[ui] lang`` — до создания сервиса (он сразу пишет страницу-список отчётов)."""
+def config_ui(config_path: str) -> tuple[str, str]:
+    """Язык и тема из ``[ui]`` — до создания сервиса (он сразу пишет страницу-список отчётов) и
+    до первого окна (тему приложению ставят до постройки виджетов)."""
     try:
-        return config_mod.load(config_path).ui.lang
-    except Exception:  # нет/битый конфиг — сервис сам скажет, что не так; язык по умолчанию
-        return i18n.DEFAULT_LANG
+        ui = config_mod.load(config_path).ui
+        return ui.lang, ui.theme
+    except Exception:  # нет/битый конфиг — сервис сам скажет, что не так; язык и тема по умолчанию
+        return i18n.DEFAULT_LANG, themes.DEFAULT_THEME
 
 
 class StatusHub(QObject):
@@ -156,35 +164,13 @@ class StatusHub(QObject):
             self.poll()
 
 
-def _dark_titlebar(win):
-    """Заголовок окна Windows 11 в цвет темы (иначе белая полоса над космосом)."""
-    if sys.platform != "win32":
-        return
-    try:
-        hwnd = int(win.winId())
-        dwm = ctypes.windll.dwmapi
-
-        def setattr_(attr, value):
-            v = ctypes.c_int(value)
-            dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
-
-        def colorref(hex_color):
-            r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
-            return (b << 16) | (g << 8) | r
-
-        setattr_(20, 1)                         # DWMWA_USE_IMMERSIVE_DARK_MODE
-        setattr_(35, colorref(theme.BG1))       # DWMWA_CAPTION_COLOR
-        setattr_(36, colorref(theme.TEXT))      # DWMWA_TEXT_COLOR
-        setattr_(34, colorref("#18293a"))       # DWMWA_BORDER_COLOR
-    except Exception:  # noqa: S110 — старый Windows: заголовок останется системным
-        pass
-
-
 class MainWindow(QMainWindow):
     def __init__(self, config_path: str, start_server: bool = True):
         super().__init__()
         self.config_path = str(Path(config_path).resolve())
-        i18n.set_lang(_config_lang(self.config_path))
+        lang, theme_id = config_ui(self.config_path)
+        i18n.set_lang(lang)
+        self._use_theme(theme_id)
         self.svc = ForgeService(self.config_path)
         self.state_dir = Path(self.config_path).parent / ".forge"
         self.setWindowIcon(theme.app_icon())
@@ -217,7 +203,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         """Шапка, вкладки и страницы на текущем языке. Повторный вызов (смена языка) заменяет
         центральный виджет целиком — прежний Qt удаляет вместе со страницами и их подписками."""
-        self.setWindowTitle(tr("Forge 3.0 — индустрия EVE Online"))
+        self.setWindowTitle(tr("Forge {version} — индустрия EVE Online", version=branding.VERSION))
         root = Backdrop(star_zone=140)
         v = QVBoxLayout(root)
         v.setContentsMargins(24, 16, 24, 6)
@@ -232,7 +218,7 @@ class MainWindow(QMainWindow):
         title_row = QHBoxLayout()
         title_row.setSpacing(10)
         title_row.addWidget(BrandTitle("FORGE", 30))
-        ver = label("3.0", "")
+        ver = label(branding.VERSION, "")
         ver.setProperty("chip", "gold")
         title_row.addWidget(ver, 0, Qt.AlignmentFlag.AlignVCenter)
         title_row.addStretch(1)
@@ -267,6 +253,10 @@ class MainWindow(QMainWindow):
         self.lang.setToolTip(tr("Язык интерфейса и новых HTML-отчётов"))
         self.lang.changed.connect(self.set_language)
         head.addWidget(self.lang, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.btn_theme = button("", "palette", tip=tr("Тема оформления"), icon_size=16)
+        self.btn_theme.setFixedSize(38, 32)
+        self.btn_theme.clicked.connect(self._pick_theme)
+        head.addWidget(self.btn_theme, 0, Qt.AlignmentFlag.AlignVCenter)
         v.addLayout(head)
 
         # --- вкладки ---
@@ -337,13 +327,8 @@ class MainWindow(QMainWindow):
         code = i18n.normalize(code)
         if code == i18n.lang():
             return
-        tab = self.tabs.value() or "dash"
         i18n.set_lang(code)
-        self._build_ui()
-        self._show_tab(tab)
-        if self.hub.snapshot:
-            self.hub.status.emit(self.hub.snapshot)  # новые страницы — сразу со статусом
-        self._on_server()
+        self._rebuild()
         svc = self.svc
 
         def save():
@@ -354,6 +339,50 @@ class MainWindow(QMainWindow):
             if err is not None:
                 self.flash(tr("Язык не сохранён в настройках: {error}", error=err_text(err)), "err", 10000)
         run_bg(save, done)
+
+    def _rebuild(self):
+        """Пересобрать шапку и страницы (сменился язык или тема), оставшись на той же вкладке."""
+        tab = self.tabs.value() or "dash"
+        self._build_ui()
+        self._show_tab(tab)
+        if self.hub.snapshot:
+            self.hub.status.emit(self.hub.snapshot)  # новые страницы — сразу со статусом
+        self._on_server()
+
+    def _use_theme(self, theme_id: str | None) -> bool:
+        """Сделать тему активной и перекрасить приложение. False — она уже активна."""
+        if themes.normalize(theme_id) == theme.active().id:
+            return False
+        theme.activate(theme_id)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply(app)
+            app.setWindowIcon(theme.app_icon())
+        TypeIcons.retheme()
+        return True
+
+    def set_theme(self, theme_id: str):
+        """Тема оформления: перекрасить приложение → пересобрать окно на месте → сохранить
+        ``[ui] theme``. HTML-отчёты от темы пульта не зависят."""
+        if not self._use_theme(theme_id):
+            return
+        self.setWindowIcon(theme.app_icon())
+        self._rebuild()
+        theme.style_titlebar(self)
+        chosen = theme.active().id
+        svc = self.svc
+
+        def done(_res, err):
+            if err is not None:
+                self.flash(tr("Тема не сохранена в настройках: {error}", error=err_text(err)), "err", 10000)
+        run_bg(lambda: svc.put_config({"ui": {"theme": chosen}}), done)
+
+    def _pick_theme(self):
+        from .theme_dialog import ThemeDialog
+
+        dlg = ThemeDialog(theme.active().id, self)
+        dlg.chosen.connect(self.set_theme)
+        dlg.open()  # не блокирует цикл событий (и тесты); закрытие удаляет окно
 
     def flash(self, text, _kind="info", ms=6000):
         self.statusBar().showMessage(text, ms)
@@ -421,7 +450,7 @@ class MainWindow(QMainWindow):
         super().showEvent(e)
         if not self._titlebar_done:
             self._titlebar_done = True
-            _dark_titlebar(self)
+            theme.style_titlebar(self)
 
     def _settings(self):
         self.state_dir.mkdir(parents=True, exist_ok=True)

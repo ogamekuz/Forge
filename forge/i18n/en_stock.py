@@ -206,22 +206,51 @@ EN: dict[str, str] = {
         "Nothing found — everything is cheaper to build (or raise “min. volume”).",
     # --- из остатков
     "Что построить из остатков": "What to build from leftovers",
-    "Ищет среди своих чертежей постройки с максимальной реальной прибылью (себестоимость минус то, "
-    "что уже лежит на складе) и использованием остатков. Размер партии подбирается сам — чтобы "
-    "вычерпать самый дефицитный пересекающийся со складом материал. Что считать складом — вкладка "
-    "«Склад».":
-        "Searches your blueprints for builds with the highest real profit (build cost minus what's "
-        "already in stock) and use of leftovers. The batch size is chosen automatically to use up the "
+    "Ищет постройки с максимальной реальной прибылью (себестоимость минус то, что уже лежит на складе) и "
+    "использованием остатков: среди своих чертежей либо, без галки «Только свои чертежи», среди всего "
+    "производимого — тогда решают только остатки. Размер партии подбирается сам — чтобы вычерпать самый "
+    "дефицитный пересекающийся со складом материал. Что считать складом — вкладка «Склад».":
+        "Finds builds with the highest real profit (build cost minus what's already in stock) and use of "
+        "leftovers: among your blueprints or, with “Own blueprints only” unchecked, among everything "
+        "buildable — then only the leftovers decide. The batch size is chosen automatically to use up the "
         "scarcest material shared with stock. What counts as stock — the “Stock” tab.",
+    "Кандидаты — из чертежей персонажей (в локациях «Где искать чертежи»). Снять — из всего "
+    "производимого: решают только остатки, а чертёж считается как в Калькуляторе — инвента или "
+    "«Стоимость чертежей вручную», иначе его цена 0 и в колонке «Чертёж» стоит «нет». Перебор всего "
+    "рынка идёт около минуты — сузить можно группами и «Лимитом кандидатов».":
+        "Candidates come from your characters' blueprints (in “Where to look for blueprints” locations). "
+        "Uncheck — from everything buildable: only the leftovers decide, and the blueprint is costed as in "
+        "the Calculator — invention or “Manual blueprint cost”, otherwise it costs 0 and the “Blueprint” "
+        "column says “none”. Scanning the whole market takes about a minute — narrow it with groups and "
+        "“Candidate limit”.",
+    "Чертёж": "Blueprint",
+    "свой": "own",
+    "вручную": "manual",
+    "Чертёж есть у персонажей — можно строить сейчас.": "Your characters have the blueprint — buildable now.",
+    "Чертежа нет, и его цена в расчёте — 0: сначала добудь чертёж (или задай цену в «Настройки → "
+    "Чертежи»).":
+        "No blueprint, and it is costed at 0: get the blueprint first (or set its price in “Settings → "
+        "Blueprints”).",
+    "Своя копия есть, но её прогонов на всю партию не хватит.":
+        "You have a copy, but it doesn't have enough runs for the whole batch.",
+    "Чертежа нет: в себестоимости — цена инвенты.": "No blueprint: the build cost includes invention.",
+    "Цена чертежа задана вручную («Настройки → Чертежи»).":
+        "The blueprint price is set manually (“Settings → Blueprints”).",
     "без резервов строек": "excluding build reservations",
     "Не предлагать пускать в дело то, что уже зарезервировали незавершённые стройки":
         "Don't suggest using what unfinished builds have already reserved",
     "Проверить остатки": "Check leftovers",
     "Только эти EVE-группы продуктов (напр. Cruiser)…": "Only these EVE product groups (e.g. Cruiser)…",
-    "группы не выбраны — все свои чертежи": "no groups selected — all your blueprints",
+    "группы не выбраны — все кандидаты": "no groups selected — all candidates",
     "Сверяю склад с чертежами…": "Matching stock against blueprints…",
+    "Сверяю склад со всем, что производится (около минуты)…":
+        "Matching stock against everything buildable (about a minute)…",
     "Ничего не нашлось — склад пуст (проверь вкладку «Склад») или ни один свой чертёж не "
     "пересекается с тем, что на нём лежит.":
         "Nothing found — stock is empty (check the “Stock” tab) or none of your blueprints use "
         "anything in it.",
+    "Ничего не нашлось — склад пуст (проверь вкладку «Склад») или из того, что на нём лежит, ничего "
+    "продаваемого не строится.":
+        "Nothing found — stock is empty (check the “Stock” tab) or nothing sellable can be built from "
+        "what's in it.",
 }

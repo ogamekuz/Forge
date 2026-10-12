@@ -918,9 +918,10 @@ class ForgeService:
 
     def recommend_stock(self, top: int = 30, min_volume: float | None = None,
                         limit: int | None = None, groups: Iterable[int] | None = None,
-                        respect_reservations: bool = True) -> list[dict]:
-        """ТОП своих чертежей по (реальная прибыль, доля себестоимости со склада). Склад —
-        по [stock], за вычетом резерва незавершённых строек (если ``respect_reservations``)."""
+                        respect_reservations: bool = True, owned: bool = True) -> list[dict]:
+        """ТОП по (реальная прибыль, доля себестоимости со склада): ``owned`` — среди своих
+        чертежей, иначе среди всего производимого (решают только остатки). Склад — по [stock],
+        за вычетом резерва незавершённых строек (если ``respect_reservations``)."""
         cfg, conn = self.ctx()
         try:
             group_ids = [int(g) for g in (groups or [])]
@@ -928,7 +929,7 @@ class ForgeService:
                         if respect_reservations else None)
             recs = recommend_mod.recommend_by_stock(
                 conn, cfg, top=top, min_volume=min_volume,
-                limit_candidates=limit, group_ids=group_ids or None, reserved=reserved,
+                limit_candidates=limit, group_ids=group_ids or None, reserved=reserved, owned=owned,
             )
         finally:
             conn.close()

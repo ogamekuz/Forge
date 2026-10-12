@@ -1,19 +1,29 @@
-"""Тёмная тема пульта Forge в цветах EVE Online.
+"""Вид пульта Forge из активной темы: палитра, шрифты, stylesheet, иконки и логотип.
 
-Платформа — Qt-шелл,
-стеклянные панели, сегменты-вкладки, пульсирующие статусы, ночное небо со звёздами. Цвета —
-EVE: глубокий космос (#04070b → #0b1118), неоновый cyan интерфейса Photon (#3fb8e0), золото
-Omega/ISK (#e8a93a), зелень прибыли, красный убытков, пурпур науки. Заголовки — Bahnschrift
-(DIN-подобный, ближе всех системных к шрифту клиента EVE), текст — Segoe UI.
+Платформа — Qt-шелл, стеклянные панели, сегменты-вкладки, пульсирующие статусы. Тем десять
+(``themes.py``); по умолчанию — Forge в цветах EVE Online: глубокий космос (#04070b → #0b1118),
+неоновый cyan интерфейса Photon (#3fb8e0), золото Omega/ISK (#e8a93a), зелень прибыли, красный
+убытков, пурпур науки, ночное небо со звёздами.
 
-Только представление: палитра, шрифты, stylesheet, иконки и логотип.
+Тема — одна на процесс: ``activate()`` ставит её и переставляет токены модуля (``TEXT``,
+``CYAN``…), ``apply()`` красит приложение. Менять можно на ходу — окно после этого пересобирает
+шапку и страницы (``MainWindow.set_theme``), поэтому цвета берутся при постройке виджета:
+``theme.TEXT`` в теле функции, а не в значении по умолчанию и не в константе класса.
+``spec`` у функций — тема вместо активной: так окно «Тема» рисует предпросмотр любой из них.
+
+Только представление.
 """
 
 from __future__ import annotations
 
-import os
+import ctypes
+import re
+import sys
+import tempfile
+from collections.abc import Mapping
+from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QRectF, Qt
+from PySide6.QtCore import QByteArray, QRectF, QStandardPaths, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -25,40 +35,59 @@ from PySide6.QtGui import (
 )
 from PySide6.QtSvg import QSvgRenderer
 
+from . import themes
+from .themes import THEMES, Rgb, Theme
+
 # ---------------------------------------------------------------------------
-# Токены
+# Активная тема и её токены
 # ---------------------------------------------------------------------------
 
-BG0 = "#070a0e"
-BG1 = "#0b1118"
-BG_DEEP = "#04070b"
-POPUP = "#0c131b"
-TEXT = "#dde6ef"
-MUTED = "#8c9cb0"
-FAINT = "#5c6a7b"
+_active: Theme = THEMES[themes.DEFAULT_THEME]
 
-CYAN = "#3fb8e0"      # Photon UI
-GOLD = "#e8a93a"      # Omega / ISK
-GREEN = "#4cc38a"
-RED = "#e5534b"
-VIOLET = "#a68bf0"
+BG0: str            # середина градиента фона окна
+BG1: str            # тело окон и диалогов
+BG_DEEP: str
+POPUP: str
+TEXT: str
+MUTED: str
+FAINT: str
 
-# тон -> (r, g, b базового цвета, светлый цвет текста/иконки на тонированном фоне)
-TONES = {
-    "cyan": ((63, 184, 224), "#8ad8f2"),
-    "gold": ((232, 169, 58), "#f4cd7e"),
-    "green": ((76, 195, 138), "#8ee0b6"),
-    "red": ((229, 83, 75), "#f29b95"),
-    "violet": ((166, 139, 240), "#cbbcf8"),
-    "steel": ((111, 149, 232), "#a9c1f5"),
-    "muted": ((140, 156, 176), MUTED),
-}
-# Имена тонов пульта-образца (Glide) → тона EVE: код виджетов переносится без правок.
-TONES["sky"] = TONES["cyan"]
-TONES["emerald"] = TONES["green"]
-TONES["amber"] = TONES["gold"]
-TONES["rose"] = TONES["red"]
-TONES["indigo"] = TONES["steel"]
+CYAN: str           # акцент (у Forge — Photon UI)
+GOLD: str           # ISK и предупреждения (у Forge — Omega)
+GREEN: str
+RED: str
+VIOLET: str
+
+# тон -> (r, g, b базового цвета, цвет текста/иконки этого тона на панели)
+TONES: Mapping[str, tuple[Rgb, str]]
+COOL: Rgb           # вуаль: наведение, чередование строк, линии сетки
+LINE: str
+LINE_STRONG: str
+SERIES: tuple[str, ...]   # цвета рядов (персонажи на диаграмме Ганта)
+WHITE: Rgb = (255, 255, 255)
+
+
+def active() -> Theme:
+    """Тема, с которой работает процесс."""
+    return _active
+
+
+def activate(theme_id: str | None) -> Theme:
+    """Сделать тему активной (неизвестное имя — тема по умолчанию) и переставить токены модуля.
+    Приложение красит ``apply()``; уже построенные виджеты остаются в прежних цветах."""
+    global _active, BG0, BG1, BG_DEEP, POPUP, TEXT, MUTED, FAINT, CYAN, GOLD, GREEN, RED, VIOLET
+    global TONES, COOL, LINE, LINE_STRONG, SERIES
+    t = themes.get(theme_id)
+    _active = t
+    BG_DEEP, BG1, BG0 = t.deep, t.window, t.backdrop[1]
+    POPUP, TEXT, MUTED, FAINT = t.popup, t.text, t.muted, t.faint
+    CYAN, GOLD, GREEN = t.accent, t.tone_color("gold"), t.tone_color("green")
+    RED, VIOLET = t.tone_color("red"), t.tone_color("violet")
+    TONES, COOL, LINE, LINE_STRONG, SERIES = t.tones, t.wash, t.line, t.line_strong, t.series
+    return t
+
+
+activate(themes.DEFAULT_THEME)
 
 # Цвет по уровню безопасности системы — как на звёздной карте EVE.
 _SEC_COLORS = [
@@ -77,37 +106,42 @@ def security_color(sec: float | None) -> str:
     return "#f00000"
 
 
-def tone_rgb(tone):
-    return TONES.get(tone, TONES["muted"])[0]
+def tone_rgb(tone, spec=None):
+    return (spec or _active).tone_rgb(tone)
 
 
-def tone_text(tone):
-    return TONES.get(tone, TONES["muted"])[1]
+def tone_text(tone, spec=None):
+    return (spec or _active).tone_text(tone)
 
 
-def rgba(tone_or_rgb, alpha):
+def rgba(tone_or_rgb, alpha, spec=None):
     """'rgba(r,g,b,A)' для QSS; alpha — доля 0..1."""
-    r, g, b = tone_rgb(tone_or_rgb) if isinstance(tone_or_rgb, str) else tone_or_rgb
-    return f"rgba({r},{g},{b},{round(alpha * 255)})"
+    return themes.rgba(tone_rgb(tone_or_rgb, spec) if isinstance(tone_or_rgb, str) else tone_or_rgb, alpha)
 
 
-def qcolor(tone_or_rgb, alpha=1.0):
-    r, g, b = tone_rgb(tone_or_rgb) if isinstance(tone_or_rgb, str) else tone_or_rgb
+def qcolor(tone_or_rgb, alpha=1.0, spec=None):
+    r, g, b = tone_rgb(tone_or_rgb, spec) if isinstance(tone_or_rgb, str) else tone_or_rgb
     return QColor(r, g, b, round(alpha * 255))
 
 
-WHITE = (255, 255, 255)
-COOL = (150, 200, 235)          # холодный оттенок линий — как рамки окон клиента EVE
-LINE = rgba(COOL, 0.10)
-LINE_STRONG = rgba(COOL, 0.20)
+def brush_color(value: str) -> QColor:
+    """``QColor`` цвета темы для своей отрисовки: ``#rrggbb``, имя, ``transparent`` или
+    ``rgba(r,g,b,A)`` из ``rgba()`` (``A`` 0..255 — сам ``QColor`` такое не разбирает). У
+    градиента QSS берётся первый стоп."""
+    value = value.strip()
+    if value.startswith("qlineargradient"):
+        first = re.search(r"stop:0\s+(rgba\([^)]*\)|#[0-9a-fA-F]+|\w+)", value)
+        value = first.group(1) if first else "transparent"
+    if value.startswith("rgba("):
+        r, g, b, a = (int(part) for part in value[5:-1].split(","))
+        return QColor(r, g, b, a)
+    return QColor(value)
+
 
 # ---------------------------------------------------------------------------
 # Шрифты
 # ---------------------------------------------------------------------------
 
-_TEXT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Inter"]
-_DISPLAY_FAMILIES = ["Bahnschrift", "Segoe UI Variable Display", "Segoe UI"]
-_MONO_FAMILIES = ["Cascadia Mono", "Cascadia Code", "Consolas"]
 _resolved: dict[tuple[str, ...], str] = {}
 
 
@@ -119,21 +153,22 @@ def _pick(candidates):
     return _resolved[key]
 
 
-def text_family():
-    return _pick(_TEXT_FAMILIES)
+def text_family(spec=None):
+    return _pick((spec or _active).text_fonts)
 
 
-def display_family():
-    return _pick(_DISPLAY_FAMILIES)
+def display_family(spec=None):
+    return _pick((spec or _active).display_fonts)
 
 
-def mono_family():
-    return _pick(_MONO_FAMILIES)
+def mono_family(spec=None):
+    return _pick((spec or _active).mono_fonts)
 
 
-def font(px, weight=400, display=False, mono=False, spacing=None, num=False):
+def font(px, weight=400, display=False, mono=False, spacing=None, num=False, spec=None):
     """``num`` — табличные цифры (tnum): колонки ISK не «пляшут» по ширине."""
-    f = QFont(_pick(_MONO_FAMILIES if mono else _DISPLAY_FAMILIES if display else _TEXT_FAMILIES))
+    t = spec or _active
+    f = QFont(_pick(t.mono_fonts if mono else t.display_fonts if display else t.text_fonts))
     f.setPixelSize(px)
     f.setWeight(QFont.Weight(weight))
     if spacing is not None:
@@ -237,6 +272,9 @@ _ICONS = {
            '<circle cx="8" cy="8" r="1.3"/>',
     "eye": '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>',
     "download": '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+    "palette": '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.6-.8 1.3-1.7-.4-1-.1-2 1-2.2H17a3.5 3.5 0 0 0 '
+               '3.5-3.6A8.4 8.4 0 0 0 12 3.5Z"/><circle cx="7.8" cy="11.5" r="1.1"/>'
+               '<circle cx="10.5" cy="7.6" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/>',
 }
 
 _SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
@@ -256,7 +294,9 @@ def _render(svg, w, h, dpr):
     return pm
 
 
-def icon_pixmap(name, color=MUTED, size=16, dpr=2.0, stroke=1.7):
+def icon_pixmap(name, color=None, size=16, dpr=2.0, stroke=1.7):
+    """Штриховая иконка из набора (цвет по умолчанию — приглушённый текст темы)."""
+    color = color or MUTED
     key = (name, color, size, dpr, stroke)
     if key not in _pixmaps:
         body = _ICONS.get(name, _ICONS["info"]).replace("currentColor", color)
@@ -264,21 +304,22 @@ def icon_pixmap(name, color=MUTED, size=16, dpr=2.0, stroke=1.7):
     return _pixmaps[key]
 
 
-def icon(name, color=MUTED, size=16, disabled_color=FAINT):
+def icon(name, color=None, size=16, disabled_color=None):
     ic = QIcon()
     ic.addPixmap(icon_pixmap(name, color, size), QIcon.Mode.Normal)
     ic.addPixmap(icon_pixmap(name, color, size), QIcon.Mode.Active)
-    ic.addPixmap(icon_pixmap(name, disabled_color, size), QIcon.Mode.Disabled)
+    ic.addPixmap(icon_pixmap(name, disabled_color or FAINT, size), QIcon.Mode.Disabled)
     return ic
 
 
-# Логотип: наковальня Forge в шестигранной рамке (мотив UI EVE) + искра; градиент cyan → золото.
+# Логотип: наковальня Forge в шестигранной рамке (мотив UI EVE) + искра; градиент — из темы
+# (у Forge cyan → золото).
 _LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
 <defs><linearGradient id="g" x1="6" y1="4" x2="42" y2="44" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#3fb8e0"/><stop offset="0.55" stop-color="#7fd0ec"/>
-<stop offset="1" stop-color="#e8a93a"/></linearGradient>
-<radialGradient id="s" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fff5d6"/>
-<stop offset="1" stop-color="#e8a93a" stop-opacity="0"/></radialGradient></defs>
+<stop offset="0" stop-color="{s0}"/><stop offset="0.55" stop-color="{s1}"/>
+<stop offset="1" stop-color="{s2}"/></linearGradient>
+<radialGradient id="s" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{glow0}"/>
+<stop offset="1" stop-color="{glow1}" stop-opacity="0"/></radialGradient></defs>
 <path d="M24 3.5 41.8 13.75v20.5L24 44.5 6.2 34.25v-20.5Z" fill="{bg}" stroke="url(#g)" stroke-width="2.4"
  stroke-linejoin="round"/>
 <path d="M24 8.6 37.4 16.3v15.4L24 39.4 10.6 31.7V16.3Z" stroke="url(#g)" stroke-width="0.9" opacity="0.35"/>
@@ -287,19 +328,24 @@ _LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="non
 <path d="M19 30.4v3.4M28.4 30.4v3.4M16.6 35h14.2" stroke="url(#g)" stroke-width="2.2" stroke-linecap="round"/>
 <circle cx="33.5" cy="15.5" r="4.6" fill="url(#s)"/>
 <path d="M33.5 11.4c.3 1.8.8 2.6 1.2 3 .4.4 1.2.9 2.5.6-1.8.3-2.6.8-3 1.2-.4.4-.9 1.2-.6 2.5-.3-1.8-.8-2.6-1.2-3-.4-.4-1.2-.9-2.5-.6 1.8-.3 2.6-.8 3-1.2.4-.4.9-1.2.6-2.5Z"
- fill="#fff3d0"/>
+ fill="{star}"/>
 </svg>"""
 
 
-def logo_pixmap(size=40, dpr=2.0, bg=BG1):
-    key = ("__logo__", size, dpr, bg)
+def logo_pixmap(size=40, dpr=2.0, bg=None, spec=None):
+    t = spec or _active
+    bg = bg or t.window
+    key = ("__logo__", t.id, size, dpr, bg)
     if key not in _pixmaps:
-        _pixmaps[key] = _render(_LOGO.format(bg=bg), size, size, dpr)
+        s0, s1, s2 = t.logo_stops
+        glow0, glow1, star = t.logo_spark
+        svg = _LOGO.format(s0=s0, s1=s1, s2=s2, glow0=glow0, glow1=glow1, star=star, bg=bg)
+        _pixmaps[key] = _render(svg, size, size, dpr)
     return _pixmaps[key]
 
 
 def app_icon():
-    """Иконка окна/панели задач: логотип на тёмной плашке."""
+    """Иконка окна/панели задач: логотип на плашке в цвет фона темы."""
     ic = QIcon()
     for s in (16, 24, 32, 48, 64, 128, 256):
         pm = QPixmap(s, s)
@@ -321,296 +367,384 @@ def app_icon():
 # Палитра и stylesheet
 # ---------------------------------------------------------------------------
 
-def _palette():
+def palette(spec=None):
+    """``QPalette`` темы ``spec`` (по умолчанию — активной)."""
+    t = spec or _active
     pal = QPalette()
     for role, col in (
-        (QPalette.ColorRole.Window, BG1),
-        (QPalette.ColorRole.WindowText, TEXT),
-        (QPalette.ColorRole.Base, "#070b10"),
-        (QPalette.ColorRole.AlternateBase, "#0c131b"),
-        (QPalette.ColorRole.Text, TEXT),
-        (QPalette.ColorRole.Button, "#101a24"),
-        (QPalette.ColorRole.ButtonText, TEXT),
+        (QPalette.ColorRole.Window, t.window),
+        (QPalette.ColorRole.WindowText, t.text),
+        (QPalette.ColorRole.Base, t.base),
+        (QPalette.ColorRole.AlternateBase, t.alt_base),
+        (QPalette.ColorRole.Text, t.text),
+        (QPalette.ColorRole.Button, t.button),
+        (QPalette.ColorRole.ButtonText, t.text),
         (QPalette.ColorRole.BrightText, "#ffffff"),
-        (QPalette.ColorRole.Highlight, "#17506a"),
-        (QPalette.ColorRole.HighlightedText, TEXT),
-        (QPalette.ColorRole.ToolTipBase, POPUP),
-        (QPalette.ColorRole.ToolTipText, TEXT),
-        (QPalette.ColorRole.PlaceholderText, FAINT),
-        (QPalette.ColorRole.Link, tone_text("cyan")),
-        (QPalette.ColorRole.LinkVisited, tone_text("cyan")),
+        (QPalette.ColorRole.Highlight, t.highlight),
+        (QPalette.ColorRole.HighlightedText, t.text),
+        (QPalette.ColorRole.ToolTipBase, t.popup),
+        (QPalette.ColorRole.ToolTipText, t.text),
+        (QPalette.ColorRole.PlaceholderText, t.faint),
+        (QPalette.ColorRole.Link, t.accent_text),
+        (QPalette.ColorRole.LinkVisited, t.accent_text),
     ):
         pal.setColor(role, QColor(col))
     for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text,
                  QPalette.ColorRole.ButtonText):
-        pal.setColor(QPalette.ColorGroup.Disabled, role, QColor(FAINT))
+        pal.setColor(QPalette.ColorGroup.Disabled, role, QColor(t.faint))
     return pal
 
 
-def asset(name):
-    """Путь к файлу из forge/desktop/assets для url() в stylesheet (прямые слеши)."""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets",
-                        name).replace("\\", "/")
+# Картинки stylesheet (галка, шевроны, ветки дерева) — в цветах темы: имя файла →
+# (тело SVG, атрибут темы с цветом, толщина штриха). ``url()`` в QSS нужен файл, поэтому они
+# пишутся в кэш рядом с иконками предметов.
+_DOWN = '<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>'
+_ASSETS: dict[str, tuple[str, str, float]] = {
+    "check.svg": ('<path d="m5 12.6 4.4 4.4L19 7.4"/>', "check_mark", 3.0),
+    "chevron-down.svg": (_DOWN, "muted", 2.0),
+    "chevron-down-hover.svg": (_DOWN, "accent_text", 2.0),
+    "branch-closed.svg": ('<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>', "faint", 2.0),
+    "branch-open.svg": (_DOWN, "accent_text", 2.0),
+}
 
 
-def _status_rules():
+def assets_dir(spec=None) -> Path:
+    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericCacheLocation)
+    return Path(base or tempfile.gettempdir()) / "Forge" / "theme" / (spec or _active).id
+
+
+def _write_asset(path: Path, svg: str) -> bool:
+    try:
+        if not path.exists() or path.read_text(encoding="utf-8") != svg:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(svg, encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
+def asset(name, spec=None):
+    """Путь (прямые слеши) к картинке stylesheet в цветах темы — для ``url()``; файл пишется,
+    если его нет или он устарел. Кэш недоступен для записи — во временную папку."""
+    t = spec or _active
+    body, attr, width = _ASSETS[name]
+    svg = _SVG.format(c=getattr(t, attr), w=f"{width:g}", b=body)
+    path = assets_dir(t) / name
+    if not _write_asset(path, svg):
+        path = Path(tempfile.gettempdir()) / "Forge" / "theme" / t.id / name
+        _write_asset(path, svg)  # оформление: без картинки stylesheet всё равно работает
+    return path.as_posix()
+
+
+def _status_rules(t):
     # радиусы — не больше половины высоты виджета: иначе Qt молча рисует прямые углы
     rules = []
-    for kind, tone in (("ok", "green"), ("err", "red"), ("info", "cyan"), ("warn", "gold")):
+    pill_radius = 14 if t.radius_chip > 6 else t.radius_chip + 1
+    for kind in ("ok", "err", "info", "warn"):
+        line, pill = t.statuses[kind], t.pills[kind]
         rules.append(f"""
 QLabel[status="{kind}"] {{
-    color: {tone_text(tone)}; background: {rgba(tone, 0.07)};
-    border: 1px solid {rgba(tone, 0.30)}; border-radius: 10px; padding: 8px 12px;
+    color: {line.fg}; background: {line.bg};
+    border: 1px solid {line.border}; border-radius: {min(10, t.radius_tile)}px; padding: 8px 12px;
 }}
-QFrame[pill="{kind}"] {{ background: {rgba(tone, 0.08)}; border: 1px solid {rgba(tone, 0.30)};
-    border-radius: 14px; }}
-QFrame[pill="{kind}"] QLabel {{ color: {tone_text(tone)}; }}""")
+QFrame[pill="{kind}"] {{ background: {pill.bg}; border: 1px solid {pill.border};
+    border-radius: {pill_radius}px; }}
+QFrame[pill="{kind}"] QLabel {{ color: {pill.fg}; }}""")
     return "".join(rules)
 
 
-def _chip_rules():
+def _chip_rules(t):
     rules = []
+    radius = min(t.radius_chip, 9)  # чип невысок: радиус больше половины высоты Qt не рисует
     for tone in ("cyan", "gold", "green", "red", "violet", "steel"):
+        look = t.chip(tone)
         rules.append(f"""
-QLabel[chip="{tone}"] {{ font-size: 11px; color: {tone_text(tone)}; background: {rgba(tone, 0.09)};
-    border: 1px solid {rgba(tone, 0.28)}; border-radius: 9px; padding: 1px 8px; }}""")
+QLabel[chip="{tone}"] {{ font-size: 11px; color: {look.fg}; background: {look.bg};
+    border: 1px solid {look.border}; border-radius: {radius}px; padding: 1px 8px; }}""")
     return "".join(rules)
 
 
-def stylesheet():
-    t = text_family()
-    d = display_family()
-    cy, st = "cyan", "steel"
-    seg_on = (f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba(cy, 0.24)}, "
-              f"stop:1 {rgba(st, 0.14)})")
+def stylesheet(spec=None):
+    """Stylesheet приложения в теме ``spec`` (по умолчанию — активной)."""
+    t = spec or _active
+    tf = text_family(t)
+    d = display_family(t)
+    mono = mono_family(t)
+
+    def wash(alpha):
+        return themes.rgba(t.wash, alpha)
+
+    def acc(alpha):
+        return themes.rgba(t.accent_rgb, alpha)
+
+    def tone(name, alpha):
+        return themes.rgba(t.tone_rgb(name), alpha)
+
+    def sel(alpha):
+        # выделение: оттенок акцента (сила — по месту) либо сплошной цвет темы
+        return t.selected or acc(alpha)
+
+    field_bg = themes.rgba(t.field, 0.85)
+    rb, rf, rp, rt = t.radius_button, t.radius_field, t.radius_panel, t.radius_tile
+    rc, rm = t.radius_chip, t.radius_menu
+    seg = t.tab_active
     return f"""
-QWidget {{ color: {TEXT}; font-family: "{t}"; font-size: 13px; }}
-QMainWindow {{ background: {BG_DEEP}; }}
+QWidget {{ color: {t.text}; font-family: "{tf}"; font-size: 13px; }}
+QMainWindow {{ background: {t.deep}; }}
 QStackedWidget, #Page, #ScrollBody {{ background: transparent; }}
-QToolTip {{ background: {POPUP}; color: {TEXT}; border: 1px solid {LINE_STRONG};
-    border-radius: 8px; padding: 6px 8px; }}
+QToolTip {{ background: {t.popup}; color: {t.text}; border: 1px solid {t.line_strong};
+    border-radius: {min(8, rm)}px; padding: 6px 8px; }}
 QLabel {{ background: transparent; }}
 
 /* поверхности */
 QFrame[card="panel"] {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {rgba(COOL, 0.050)},
-                                stop:1 {rgba(COOL, 0.018)});
-    border: 1px solid {LINE}; border-radius: 16px; }}
-QFrame[card="panel"][hover="true"]:hover {{ border-color: {LINE_STRONG}; }}
-QFrame[card="tile"] {{ background: {rgba(COOL, 0.035)}; border: 1px solid {LINE};
-    border-radius: 12px; }}
-QFrame[card="tile"][hover="true"]:hover {{ background: {rgba(COOL, 0.06)};
-    border-color: {LINE_STRONG}; }}
+    background: {t.panel_bg};
+    border: 1px solid {t.line}; border-radius: {rp}px; }}
+QFrame[card="panel"][hover="true"]:hover {{ border-color: {t.line_strong}; }}
+QFrame[card="tile"] {{ background: {t.tile_bg}; border: 1px solid {t.line};
+    border-radius: {rt}px; }}
+QFrame[card="tile"][hover="true"]:hover {{ background: {wash(0.06)};
+    border-color: {t.line_strong}; }}
 QFrame[card="accent"] {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba(cy, 0.14)},
-                                stop:1 {rgba("gold", 0.06)});
-    border: 1px solid {rgba(cy, 0.28)}; border-radius: 14px; }}
-QFrame[card="host"] {{ background: {rgba(COOL, 0.02)}; border: 1px solid {LINE};
-    border-radius: 12px; }}
-QFrame[card="host"]:hover {{ background: {rgba(COOL, 0.045)}; border-color: {LINE_STRONG}; }}
-QFrame[card="host"][on="true"] {{ border-color: {rgba(cy, 0.45)};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba(cy, 0.12)},
-                                stop:1 {rgba(st, 0.07)}); }}
-QFrame[chip="true"] {{ background: {rgba(COOL, 0.05)}; border: 1px solid {LINE};
-    border-radius: 13px; }}
-QFrame[chip="true"]:hover {{ border-color: {LINE_STRONG}; }}
-QFrame[seg="true"] {{ background: {rgba(COOL, 0.04)}; border: 1px solid {LINE};
-    border-radius: 19px; }}
-QFrame[hline="true"] {{ background: {LINE}; border: none; max-height: 1px; min-height: 1px; }}
-QFrame[popup="true"] {{ background: {POPUP}; border: 1px solid {LINE_STRONG}; border-radius: 10px; }}
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {acc(0.14)},
+                                stop:1 {tone("gold", 0.06)});
+    border: 1px solid {acc(0.28)}; border-radius: {min(14, rp)}px; }}
+QFrame[card="host"] {{ background: {wash(0.02)}; border: 1px solid {t.line};
+    border-radius: {rt}px; }}
+QFrame[card="host"]:hover {{ background: {wash(0.045)}; border-color: {t.line_strong}; }}
+QFrame[card="host"][on="true"] {{ border-color: {acc(0.45)};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {acc(0.12)},
+                                stop:1 {tone("steel", 0.07)}); }}
+QFrame[chip="true"] {{ background: {wash(0.05)}; border: 1px solid {t.line};
+    border-radius: {rb}px; }}
+QFrame[chip="true"]:hover {{ border-color: {t.line_strong}; }}
+QFrame[seg="true"] {{ background: {wash(0.04)}; border: 1px solid {t.line};
+    border-radius: {rb + 6}px; }}
+QFrame[hline="true"] {{ background: {t.line}; border: none; max-height: 1px; min-height: 1px; }}
+QFrame[popup="true"] {{ background: {t.popup}; border: 1px solid {t.line_strong}; border-radius: {rm}px; }}
 
 /* типографика */
 QLabel[role="title"] {{ font-family: "{d}"; font-size: 15px; font-weight: 600; }}
-QLabel[role="meta"] {{ font-size: 12px; color: {FAINT}; }}
-QLabel[role="muted"] {{ color: {MUTED}; }}
-QLabel[role="faint"] {{ color: {FAINT}; font-size: 12px; }}
-QLabel[role="label"] {{ color: {MUTED}; font-size: 12px; }}
-QLabel[role="section"] {{ font-family: "{d}"; color: {tone_text(cy)}; font-size: 11px;
+QLabel[role="meta"] {{ font-size: 12px; color: {t.faint}; }}
+QLabel[role="muted"] {{ color: {t.muted}; }}
+QLabel[role="faint"] {{ color: {t.faint}; font-size: 12px; }}
+QLabel[role="label"] {{ color: {t.muted}; font-size: 12px; }}
+QLabel[role="section"] {{ font-family: "{d}"; color: {t.accent_text}; font-size: 11px;
     font-weight: 600; }}
 QLabel[role="stat-value"] {{ font-family: "{d}"; font-size: 24px; font-weight: 600; }}
-QLabel[role="stat-sub"] {{ font-size: 12px; color: {FAINT}; }}
-QLabel[role="mono"] {{ font-family: "{mono_family()}"; font-size: 12px; color: {FAINT}; }}
-QLabel[role="tagline"] {{ font-size: 13px; color: {MUTED}; }}
+QLabel[role="stat-sub"] {{ font-size: 12px; color: {t.faint}; }}
+QLabel[role="mono"] {{ font-family: "{mono}"; font-size: 12px; color: {t.faint}; }}
+QLabel[role="tagline"] {{ font-size: 13px; color: {t.muted}; }}
 QLabel[role="empty-title"] {{ font-family: "{d}"; font-size: 20px; font-weight: 600; }}
 QLabel[role="body"] {{ font-size: 14px; }}
-QLabel[role="good"] {{ color: {tone_text("green")}; }}
-QLabel[role="bad"] {{ color: {tone_text("red")}; }}
-QLabel[role="warn"] {{ color: {tone_text("gold")}; }}
-QLabel[role="isk"] {{ color: {tone_text("gold")}; }}
-QLabel[role="code"] {{ font-family: "{mono_family()}"; font-size: 12px; color: {tone_text(cy)};
-    background: {rgba((3, 6, 10), 0.75)}; border: 1px solid {LINE}; border-radius: 10px;
+QLabel[role="good"] {{ color: {t.tone_text("green")}; }}
+QLabel[role="bad"] {{ color: {t.tone_text("red")}; }}
+QLabel[role="warn"] {{ color: {t.tone_text("gold")}; }}
+QLabel[role="isk"] {{ color: {t.tone_text("gold")}; }}
+QLabel[role="code"] {{ font-family: "{mono}"; font-size: 12px; color: {t.accent_text};
+    background: {t.code_bg}; border: 1px solid {t.line}; border-radius: {min(10, rt)}px;
     padding: 8px 12px; }}
-{_chip_rules()}
+{_chip_rules(t)}
 
 /* кнопки */
-QPushButton {{ background: {rgba(COOL, 0.05)}; color: {MUTED}; border: 1px solid {LINE};
-    border-radius: 13px; padding: 6px 14px; font-size: 13px; min-height: 16px; }}
-QPushButton:hover {{ color: {TEXT}; border-color: {LINE_STRONG}; }}
-QPushButton:pressed {{ background: {rgba(COOL, 0.02)}; }}
-QPushButton:disabled {{ color: {FAINT}; border-color: {rgba(COOL, 0.06)}; }}
-QPushButton:checked {{ color: {tone_text(cy)}; border-color: {rgba(cy, 0.45)};
-    background: {rgba(cy, 0.10)}; }}
-QPushButton[variant="primary"] {{ color: {tone_text(cy)}; border-color: {rgba(cy, 0.42)};
-    background: {rgba(cy, 0.10)}; }}
-QPushButton[variant="primary"]:hover {{ background: {rgba(cy, 0.18)}; }}
-QPushButton[variant="primary"]:disabled {{ color: {FAINT}; border-color: {LINE};
-    background: {rgba(COOL, 0.03)}; }}
-QPushButton[variant="gold"] {{ color: {tone_text("gold")}; border-color: {rgba("gold", 0.42)};
-    background: {rgba("gold", 0.08)}; }}
-QPushButton[variant="gold"]:hover {{ background: {rgba("gold", 0.16)}; }}
-QPushButton[variant="good"] {{ color: {tone_text("green")}; border-color: {rgba("green", 0.42)};
-    background: {rgba("green", 0.08)}; }}
-QPushButton[variant="good"]:hover {{ background: {rgba("green", 0.16)}; }}
-QPushButton[variant="gold"]:disabled, QPushButton[variant="good"]:disabled {{ color: {FAINT};
-    border-color: {LINE}; background: {rgba(COOL, 0.03)}; }}
-QPushButton[variant="danger"] {{ color: {tone_text("red")}; border-color: {rgba("red", 0.45)};
-    background: transparent; }}
-QPushButton[variant="danger"]:hover {{ border-color: {rgba("red", 0.7)};
-    background: {rgba("red", 0.08)}; }}
-QPushButton[variant="hero"] {{ color: #eafaff; font-family: "{d}"; font-size: 14px; font-weight: 600;
-    border: 1px solid {rgba(cy, 0.40)}; border-radius: 13px; padding: 10px 18px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba(cy, 0.28)},
-                                stop:1 {rgba(st, 0.16)}); }}
-QPushButton[variant="hero"]:hover {{ border-color: {rgba(cy, 0.7)};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba(cy, 0.38)},
-                                stop:1 {rgba(st, 0.24)}); }}
-QPushButton[variant="hero"]:disabled {{ color: {FAINT}; border-color: {LINE};
-    background: {rgba(COOL, 0.04)}; }}
-QPushButton[variant="hero-gold"] {{ color: #fff6e3; font-family: "{d}"; font-size: 14px; font-weight: 600;
-    border: 1px solid {rgba("gold", 0.45)}; border-radius: 13px; padding: 10px 18px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {rgba("gold", 0.26)},
-                                stop:1 {rgba("red", 0.10)}); }}
-QPushButton[variant="hero-gold"]:hover {{ border-color: {rgba("gold", 0.75)}; }}
-QPushButton[variant="hero-gold"]:disabled {{ color: {FAINT}; border-color: {LINE};
-    background: {rgba(COOL, 0.04)}; }}
+QPushButton {{ background: {wash(0.05)}; color: {t.muted}; border: 1px solid {t.line};
+    border-radius: {rb}px; padding: 6px 14px; font-size: 13px; min-height: 16px; }}
+QPushButton:hover {{ color: {t.text}; border-color: {t.line_strong}; }}
+QPushButton:pressed {{ background: {wash(0.02)}; }}
+QPushButton:disabled {{ color: {t.faint}; border-color: {wash(0.06)}; }}
+QPushButton:checked {{ color: {t.checked.fg}; border-color: {t.checked.border};
+    background: {t.checked.bg}; }}
+QPushButton[variant="primary"] {{ color: {t.primary.fg}; border-color: {t.primary.border};
+    background: {t.primary.bg}; }}
+QPushButton[variant="primary"]:hover {{ background: {t.primary_hover_bg}; }}
+QPushButton[variant="primary"]:disabled {{ color: {t.faint}; border-color: {t.line};
+    background: {wash(0.03)}; }}
+QPushButton[variant="gold"] {{ color: {t.tone_text("gold")}; border-color: {tone("gold", 0.42)};
+    background: {tone("gold", 0.08)}; }}
+QPushButton[variant="gold"]:hover {{ background: {tone("gold", 0.16)}; }}
+QPushButton[variant="good"] {{ color: {t.tone_text("green")}; border-color: {tone("green", 0.42)};
+    background: {tone("green", 0.08)}; }}
+QPushButton[variant="good"]:hover {{ background: {tone("green", 0.16)}; }}
+QPushButton[variant="gold"]:disabled, QPushButton[variant="good"]:disabled {{ color: {t.faint};
+    border-color: {t.line}; background: {wash(0.03)}; }}
+QPushButton[variant="danger"] {{ color: {t.danger.fg}; border-color: {t.danger.border};
+    background: {t.danger.bg}; }}
+QPushButton[variant="danger"]:hover {{ border-color: {tone("red", 0.7)};
+    background: {t.danger_hover_bg}; }}
+QPushButton[variant="hero"] {{ color: {t.hero.fg}; font-family: "{d}"; font-size: 14px; font-weight: 600;
+    border: 1px solid {t.hero.border}; border-radius: {rb}px; padding: 10px 18px;
+    background: {t.hero.bg}; }}
+QPushButton[variant="hero"]:hover {{ border-color: {t.hero_hover[1]};
+    background: {t.hero_hover[0]}; }}
+QPushButton[variant="hero"]:disabled {{ color: {t.faint}; border-color: {t.line};
+    background: {wash(0.04)}; }}
+QPushButton[variant="hero-gold"] {{ color: {t.hero_gold.fg}; font-family: "{d}"; font-size: 14px; font-weight: 600;
+    border: 1px solid {t.hero_gold.border}; border-radius: {rb}px; padding: 10px 18px;
+    background: {t.hero_gold.bg}; }}
+QPushButton[variant="hero-gold"]:hover {{ border-color: {t.hero_gold_hover_border}; }}
+QPushButton[variant="hero-gold"]:disabled {{ color: {t.faint}; border-color: {t.line};
+    background: {wash(0.04)}; }}
 QPushButton[variant="ghost"] {{ background: transparent; border-color: transparent;
-    padding: 5px 9px; border-radius: 10px; }}
-QPushButton[variant="ghost"]:hover {{ background: {rgba(COOL, 0.06)}; }}
+    padding: 5px 9px; border-radius: {min(10, rb)}px; }}
+QPushButton[variant="ghost"]:hover {{ background: {wash(0.06)}; }}
 QPushButton[variant="link"] {{ background: transparent; border: none; padding: 2px 0;
-    color: {tone_text(cy)}; text-align: left; }}
-QPushButton[variant="link"]:hover {{ color: {TEXT}; }}
-QPushButton[variant="row"] {{ text-align: left; padding: 8px 10px; border-radius: 10px;
-    border: 1px solid transparent; background: transparent; color: {TEXT}; }}
-QPushButton[variant="row"]:hover {{ background: {rgba(COOL, 0.04)}; border-color: {LINE}; }}
-QPushButton[variant="toggle"] {{ padding: 2px 8px; border-radius: 9px; font-size: 11px; min-height: 12px; }}
-QPushButton[variant="toggle"][state="build"] {{ color: {tone_text("green")};
-    border-color: {rgba("green", 0.35)}; background: {rgba("green", 0.08)}; }}
-QPushButton[variant="toggle"][state="buy"] {{ color: {tone_text("gold")};
-    border-color: {rgba("gold", 0.38)}; background: {rgba("gold", 0.08)}; }}
-QPushButton[variant="toggle"][state="exact"] {{ color: {tone_text("violet")};
-    border-color: {rgba("violet", 0.40)}; background: {rgba("violet", 0.10)}; }}
+    color: {t.accent_text}; text-align: left; }}
+QPushButton[variant="link"]:hover {{ color: {t.text}; }}
+QPushButton[variant="row"] {{ text-align: left; padding: 8px 10px; border-radius: {min(10, rb)}px;
+    border: 1px solid transparent; background: transparent; color: {t.text}; }}
+QPushButton[variant="row"]:hover {{ background: {wash(0.04)}; border-color: {t.line}; }}
+QPushButton[variant="toggle"] {{ padding: 2px 8px; border-radius: {min(rc, 9)}px; font-size: 11px; min-height: 12px; }}
+QPushButton[variant="toggle"][state="build"] {{ color: {t.tone_text("green")};
+    border-color: {tone("green", 0.35)}; background: {tone("green", 0.08)}; }}
+QPushButton[variant="toggle"][state="buy"] {{ color: {t.tone_text("gold")};
+    border-color: {tone("gold", 0.38)}; background: {tone("gold", 0.08)}; }}
+QPushButton[variant="toggle"][state="exact"] {{ color: {t.tone_text("violet")};
+    border-color: {tone("violet", 0.40)}; background: {tone("violet", 0.10)}; }}
 
 /* сегменты */
 QPushButton[segbtn="true"] {{ background: transparent; border: 1px solid transparent;
-    border-radius: 15px; padding: 7px 14px; color: {MUTED}; font-weight: 500; }}
-QPushButton[segbtn="true"]:hover {{ color: {TEXT}; }}
-QPushButton[segbtn="true"]:checked {{ color: #eafaff; background: {seg_on};
-    border-color: {rgba(cy, 0.32)}; }}
-QPushButton[segbtn="true"]:disabled {{ color: {FAINT}; }}
-QFrame[seg="true"][small="true"] {{ border-radius: 15px; }}
+    border-radius: {rb + 2}px; padding: 7px 14px; color: {t.muted}; font-weight: 500; }}
+QPushButton[segbtn="true"]:hover {{ color: {t.text}; }}
+QPushButton[segbtn="true"]:checked {{ color: {seg.fg}; background: {seg.bg};
+    border-color: {seg.border}; }}
+QPushButton[segbtn="true"]:disabled {{ color: {t.faint}; }}
+QFrame[seg="true"][small="true"] {{ border-radius: {rb + 2}px; }}
 QFrame[seg="true"][small="true"] QPushButton[segbtn="true"] {{ padding: 5px 12px; font-size: 12px;
-    border-radius: 11px; }}
+    border-radius: {max(rb - 2, 2)}px; }}
 
 /* поля ввода */
 QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
-    background: {rgba((5, 9, 14), 0.85)}; color: {TEXT}; border: 1px solid {LINE};
-    border-radius: 10px; padding: 6px 10px; font-size: 13px;
-    selection-background-color: {rgba(cy, 0.35)}; selection-color: {TEXT}; }}
+    background: {field_bg}; color: {t.text}; border: 1px solid {t.line};
+    border-radius: {rf}px; padding: 6px 10px; font-size: 13px;
+    selection-background-color: {t.text_selection}; selection-color: {t.text}; }}
 QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{
-    border-color: {rgba(cy, 0.55)}; }}
-QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{ color: {FAINT}; }}
-QLineEdit[mono="true"] {{ font-family: "{mono_family()}"; font-size: 12px; }}
+    border-color: {t.focus}; }}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{ color: {t.faint}; }}
+QLineEdit[mono="true"] {{ font-family: "{mono}"; font-size: 12px; }}
 QLineEdit[compact="true"], QSpinBox[compact="true"], QDoubleSpinBox[compact="true"] {{
-    padding: 3px 6px; border-radius: 8px; font-size: 12px; }}
+    padding: 3px 6px; border-radius: {min(8, rf)}px; font-size: 12px; }}
 QSpinBox, QDoubleSpinBox {{ padding: 5px 8px; }}
 QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
     width: 0; border: none; }}
 QComboBox {{ padding-right: 30px; }}
 QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right;
     width: 28px; border: none; }}
-QComboBox::down-arrow {{ image: url("{asset("chevron-down.svg")}"); width: 14px; height: 14px;
+QComboBox::down-arrow {{ image: url("{asset("chevron-down.svg", t)}"); width: 14px; height: 14px;
     margin-right: 10px; }}
 QComboBox::down-arrow:hover, QComboBox::down-arrow:on {{
-    image: url("{asset("chevron-down-hover.svg")}"); }}
-QComboBox QAbstractItemView {{ background: {POPUP}; color: {TEXT}; border: 1px solid {LINE_STRONG};
-    border-radius: 10px; padding: 4px; outline: 0;
-    selection-background-color: {rgba(cy, 0.20)}; selection-color: {TEXT}; }}
+    image: url("{asset("chevron-down-hover.svg", t)}"); }}
+QComboBox QAbstractItemView {{ background: {t.popup}; color: {t.text}; border: 1px solid {t.line_strong};
+    border-radius: {rm}px; padding: 4px; outline: 0;
+    selection-background-color: {sel(0.20)}; selection-color: {t.text}; }}
 
-QCheckBox {{ spacing: 8px; color: {TEXT}; background: transparent; }}
-QCheckBox:disabled {{ color: {FAINT}; }}
-QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 5px; border: 1px solid {LINE_STRONG};
-    background: {rgba((5, 9, 14), 0.85)}; }}
-QCheckBox::indicator:hover {{ border-color: {rgba(cy, 0.6)}; }}
-QCheckBox::indicator:checked {{ background: {rgba(cy, 0.85)}; border-color: {rgba(cy, 0.95)};
-    image: url("{asset("check.svg")}"); }}
-QCheckBox::indicator:indeterminate {{ background: {rgba(cy, 0.35)}; border-color: {rgba(cy, 0.7)}; }}
-QCheckBox::indicator:disabled {{ border-color: {LINE}; background: {rgba(COOL, 0.03)}; }}
+QCheckBox {{ spacing: 8px; color: {t.text}; background: transparent; }}
+QCheckBox:disabled {{ color: {t.faint}; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: {min(5, rf)}px; border: 1px solid {t.line_strong};
+    background: {field_bg}; }}
+QCheckBox::indicator:hover {{ border-color: {acc(0.6)}; }}
+QCheckBox::indicator:checked {{ background: {t.check_fill}; border-color: {t.check_border};
+    image: url("{asset("check.svg", t)}"); }}
+QCheckBox::indicator:indeterminate {{ background: {acc(0.35)}; border-color: {acc(0.7)}; }}
+QCheckBox::indicator:disabled {{ border-color: {t.line}; background: {wash(0.03)}; }}
 
 /* списки, таблицы, деревья */
 QListWidget {{ background: transparent; border: none; outline: 0; }}
-QListWidget::item {{ border-radius: 10px; margin: 1px 0; border: 1px solid transparent; padding: 3px 6px; }}
-QListWidget::item:hover {{ background: {rgba(COOL, 0.04)}; }}
-QListWidget::item:selected {{ background: {seg_on}; border-color: {rgba(cy, 0.25)}; color: {TEXT}; }}
+QListWidget::item {{ border-radius: {min(10, rt)}px; margin: 1px 0; border: 1px solid transparent; padding: 3px 6px; }}
+QListWidget::item:hover {{ background: {wash(0.04)}; }}
+QListWidget::item:selected {{ background: {t.list_selected}; border-color: {acc(0.25)}; color: {t.text}; }}
 QTableView, QTreeView {{ background: transparent; border: none; outline: 0;
-    gridline-color: transparent; selection-background-color: {rgba(cy, 0.14)};
-    selection-color: {TEXT}; alternate-background-color: {rgba(COOL, 0.022)}; }}
+    gridline-color: transparent; selection-background-color: {sel(0.14)};
+    selection-color: {t.text}; alternate-background-color: {wash(0.022)}; }}
 QTableView::item, QTreeView::item {{ padding: 3px 6px; border: none;
-    border-bottom: 1px solid {rgba(COOL, 0.05)}; }}
-QTableView::item:hover, QTreeView::item:hover {{ background: {rgba(COOL, 0.05)}; }}
-QTableView::item:selected, QTreeView::item:selected {{ background: {rgba(cy, 0.14)}; color: {TEXT}; }}
+    border-bottom: 1px solid {wash(0.05)}; }}
+QTableView::item:hover, QTreeView::item:hover {{ background: {wash(0.05)}; }}
+QTableView::item:selected, QTreeView::item:selected {{ background: {sel(0.14)}; color: {t.text}; }}
 QTreeView::indicator, QTableView::indicator, QListView::indicator {{ width: 15px; height: 15px;
-    border-radius: 4px; border: 1px solid {LINE_STRONG}; background: {rgba((5, 9, 14), 0.85)}; }}
-QTreeView::indicator:hover, QTableView::indicator:hover {{ border-color: {rgba(cy, 0.6)}; }}
+    border-radius: {min(4, rf)}px; border: 1px solid {t.line_strong}; background: {field_bg}; }}
+QTreeView::indicator:hover, QTableView::indicator:hover {{ border-color: {acc(0.6)}; }}
 QTreeView::indicator:checked, QTableView::indicator:checked, QListView::indicator:checked {{
-    background: {rgba(cy, 0.85)}; border-color: {rgba(cy, 0.95)}; image: url("{asset("check.svg")}"); }}
-QTreeView::indicator:indeterminate {{ background: {rgba(cy, 0.35)}; border-color: {rgba(cy, 0.7)}; }}
-QTreeView::indicator:disabled {{ border-color: {LINE}; background: {rgba(COOL, 0.03)}; }}
+    background: {t.check_fill}; border-color: {t.check_border}; image: url("{asset("check.svg", t)}"); }}
+QTreeView::indicator:indeterminate {{ background: {acc(0.35)}; border-color: {acc(0.7)}; }}
+QTreeView::indicator:disabled {{ border-color: {t.line}; background: {wash(0.03)}; }}
 QTreeView::branch {{ background: transparent; }}
-QTreeView::branch:has-children:closed {{ image: url("{asset("branch-closed.svg")}"); }}
-QTreeView::branch:has-children:open {{ image: url("{asset("branch-open.svg")}"); }}
+QTreeView::branch:has-children:closed {{ image: url("{asset("branch-closed.svg", t)}"); }}
+QTreeView::branch:has-children:open {{ image: url("{asset("branch-open.svg", t)}"); }}
 QHeaderView {{ background: transparent; border: none; }}
-QHeaderView::section {{ background: transparent; color: {FAINT}; border: none;
-    border-bottom: 1px solid {LINE}; padding: 4px 6px; font-size: 11px; font-weight: 600; }}
-QHeaderView::section:hover {{ color: {MUTED}; }}
+QHeaderView::section {{ background: transparent; color: {t.faint}; border: none;
+    border-bottom: 1px solid {t.line}; padding: 4px 6px; font-size: 11px; font-weight: 600; }}
+QHeaderView::section:hover {{ color: {t.muted}; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 
 /* прокрутка */
 QScrollArea {{ background: transparent; border: none; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: {rgba(COOL, 0.16)}; border-radius: 3px; min-height: 30px; }}
-QScrollBar::handle:vertical:hover {{ background: {rgba(cy, 0.40)}; }}
+QScrollBar::handle:vertical {{ background: {wash(0.16)}; border-radius: 3px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: {t.scroll_hover}; }}
 QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
-QScrollBar::handle:horizontal {{ background: {rgba(COOL, 0.16)}; border-radius: 3px; min-width: 30px; }}
-QScrollBar::handle:horizontal:hover {{ background: {rgba(cy, 0.40)}; }}
+QScrollBar::handle:horizontal {{ background: {wash(0.16)}; border-radius: 3px; min-width: 30px; }}
+QScrollBar::handle:horizontal:hover {{ background: {t.scroll_hover}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
-QMenu {{ background: {POPUP}; border: 1px solid {LINE_STRONG}; border-radius: 10px; padding: 4px; }}
-QMenu::item {{ padding: 6px 18px; border-radius: 6px; color: {TEXT}; }}
-QMenu::item:selected {{ background: {rgba(cy, 0.18)}; }}
-QMenu::item:disabled {{ color: {FAINT}; }}
-QMenu::separator {{ height: 1px; background: {LINE}; margin: 4px 8px; }}
+QMenu {{ background: {t.popup}; border: 1px solid {t.line_strong}; border-radius: {rm}px; padding: 4px; }}
+QMenu::item {{ padding: 6px 18px; border-radius: {min(6, rm)}px; color: {t.text}; }}
+QMenu::item:selected {{ background: {sel(0.18)}; }}
+QMenu::item:disabled {{ color: {t.faint}; }}
+QMenu::separator {{ height: 1px; background: {t.line}; margin: 4px 8px; }}
 
-QProgressBar {{ background: {rgba(COOL, 0.06)}; border: none; border-radius: 4px; height: 8px;
+QProgressBar {{ background: {wash(0.06)}; border: none; border-radius: 4px; height: 8px;
     text-align: center; color: transparent; }}
 QProgressBar::chunk {{ border-radius: 4px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {CYAN}, stop:1 {GOLD}); }}
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {t.progress[0]}, stop:1 {t.progress[1]}); }}
 
-QStatusBar {{ background: transparent; color: {FAINT}; border-top: 1px solid {rgba(COOL, 0.07)};
+QStatusBar {{ background: transparent; color: {t.faint}; border-top: 1px solid {wash(0.07)};
     font-size: 12px; }}
 QStatusBar::item {{ border: none; }}
-QStatusBar QLabel {{ color: {FAINT}; font-size: 12px; padding: 0 6px; }}
+QStatusBar QLabel {{ color: {t.faint}; font-size: 12px; padding: 0 6px; }}
 
-QMessageBox, QDialog {{ background: {POPUP}; }}
-QMessageBox QLabel {{ color: {TEXT}; font-size: 13px; }}
-{_status_rules()}
+QMessageBox, QDialog {{ background: {t.popup}; }}
+QMessageBox QLabel {{ color: {t.text}; font-size: 13px; }}
+{_status_rules(t)}
 """
 
 
 def apply(app):
-    """Тема на всё приложение. Вызывать до создания окон (Fusion честно красит палитрой
-    нативные контролы)."""
+    """Активная тема на всё приложение. Первый раз — до создания окон (Fusion честно красит
+    палитрой нативные контролы); повторно — при смене темы на ходу. Цветовая схема (тёмная или
+    светлая) заодно говорит Windows, какими рисовать заголовки диалогов."""
+    t = _active
+    try:
+        app.styleHints().setColorScheme(Qt.ColorScheme.Dark if t.dark else Qt.ColorScheme.Light)
+    except AttributeError:  # Qt < 6.8 — заголовки по системной схеме
+        pass
     app.setStyle("Fusion")
-    app.setPalette(_palette())
+    app.setPalette(palette(t))
     app.setFont(font(13))
-    app.setStyleSheet(stylesheet())
+    app.setStyleSheet(stylesheet(t))
+
+
+def style_titlebar(window, spec=None):
+    """Заголовок окна Windows 11 в цвет темы (иначе светлая полоса над тёмным окном). Как
+    получится: старый Windows оставит свой."""
+    if sys.platform != "win32":
+        return
+    t = spec or _active
+    caption, text, border = t.titlebar
+    try:
+        hwnd = int(window.winId())
+        dwm = ctypes.windll.dwmapi
+
+        def set_attr(attr, value):
+            v = ctypes.c_int(value)
+            dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
+
+        def colorref(hex_color):
+            r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+            return (b << 16) | (g << 8) | r
+
+        set_attr(20, 1 if t.dark else 0)   # DWMWA_USE_IMMERSIVE_DARK_MODE
+        set_attr(35, colorref(caption))    # DWMWA_CAPTION_COLOR
+        set_attr(36, colorref(text))       # DWMWA_TEXT_COLOR
+        set_attr(34, colorref(border))     # DWMWA_BORDER_COLOR
+    except Exception:  # noqa: S110 — старый Windows: заголовок останется системным
+        pass

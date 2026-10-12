@@ -478,3 +478,42 @@ def test_parse_fit_text():
     assert parse_fit_text(fit) == [("Ishtar", 1), ("Drone Damage Amplifier II", 2), ("Hammerhead II", 5)]
     cargo = "Tritanium\t1,134\tMineral\tMaterial\nPyerite\t20\tMineral\tMaterial\n"
     assert parse_fit_text(cargo) == [("Tritanium", 1134), ("Pyerite", 20)]
+
+
+def test_recommend_from_stock_own_blueprints_or_everything(win, qapp, tmp_path):
+    """«Из остатков склада»: по умолчанию — свои чертежи; без галки — всё производимое, а в
+    колонке «Чертёж» видно, чего нет."""
+    conn = storage.connect(str(tmp_path / "forge.db"))
+    conn.executescript(
+        """
+        INSERT INTO sde_types(type_id,name,volume) VALUES (2001,'Gadget',5.0);
+        INSERT INTO sde_blueprint_products(blueprint_type_id,activity_id,product_type_id,quantity,probability)
+            VALUES (1001,1,2001,1,1.0);
+        INSERT INTO sde_blueprint_activities(blueprint_type_id,activity_id,time_seconds) VALUES (1001,1,600);
+        INSERT INTO sde_blueprint_materials(blueprint_type_id,activity_id,material_type_id,quantity)
+            VALUES (1001,1,34,10);
+        INSERT INTO market_snapshot(type_id,region_id,sell_min,buy_max,sell_volume)
+            VALUES (2001,10000009,900.0,800.0,50);
+        """
+    )
+    conn.commit()
+    conn.close()
+    win.go("recommend")
+    page = win.pages["recommend"]
+    page.seg.set_value("stock", emit=True)
+    assert page.s_owned.isChecked()                                   # по умолчанию — только свои
+
+    def run() -> dict[str, dict]:
+        page._run_stock()
+        assert not page.s_go.isEnabled()
+        assert wait_until(qapp, lambda: page.s_go.isEnabled(), 20)
+        return {r["name"]: r for r in page.s_table.rows()}
+
+    rows = run()
+    assert list(rows) == ["Widget"] and rows["Widget"]["blueprint_source"] == "owned_bpo"
+    page.s_owned.setChecked(False)                                    # только остатки
+    rows = run()
+    assert set(rows) == {"Widget", "Gadget"} and rows["Gadget"]["blueprint_source"] == "missing"
+    cells = {page.s_table.item(r, 0).text(): page.s_table.item(r, 1).text()
+             for r in range(page.s_table.rowCount())}
+    assert cells == {"Widget": "свой", "Gadget": "нет"}

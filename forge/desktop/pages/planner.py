@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
 )
 
 from ...i18n import short_dt
-from ...planner.instructions import GANTT_COLORS
 from ...planner.schedule import RUNNING_JOBS_NOTE
 from .. import theme
 from ..widgets import (
@@ -73,7 +72,8 @@ def owner_line(it: dict) -> str:
         return "<br>" + tr("чертёж/формула — свои (владелец)")
     if status == "transfer":
         who = ", ".join(it.get("owners") or []) or tr("владельца")
-        return "<br><span style='color:#e8a93a'>" + tr("нужна передача чертежа от: {who}", who=who) + "</span>"
+        return (f"<br><span style='color:{theme.GOLD}'>"
+                + tr("нужна передача чертежа от: {who}", who=who) + "</span>")
     return ""
 
 
@@ -104,7 +104,8 @@ class GanttView(QWidget):
         for it in self._items:
             if it["character_name"] not in names:
                 names.append(it["character_name"])
-        self._colors = {n: QColor(GANTT_COLORS[i % len(GANTT_COLORS)]) for i, n in enumerate(names)}
+        series = theme.SERIES  # цвета персонажей — ряды активной темы
+        self._colors = {n: QColor(series[i % len(series)]) for i, n in enumerate(names)}
         order = {"manufacturing": 0, "reaction": 1, "science": 2}
         keys = {(it["character_name"], it["pool"], it["slot"]) for it in self._items}
         keys_sorted = sorted(keys, key=lambda k: (names.index(k[0]), order.get(k[1], 9), k[2]))
@@ -170,7 +171,7 @@ class GanttView(QWidget):
                 p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
             text = job_title(it)
             if r.width() > 40:
-                p.setPen(QColor("#061018"))
+                p.setPen(QColor(theme.active().on_series))
                 p.drawText(r.adjusted(5, 0, -3, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                            fm.elidedText(text, Qt.TextElideMode.ElideRight, r.width() - 8))
             self._bars.append((r, it))

@@ -165,4 +165,5 @@ def stock_recommendation_to_dict(r: StockRecommendation) -> dict:
         "isk_per_hour": r.isk_per_hour,
         "daily_volume": r.daily_volume,
         "score": r.score,
+        "blueprint_source": r.blueprint_source,
     }

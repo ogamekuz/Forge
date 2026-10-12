@@ -12,6 +12,8 @@ used only to sync data from the official EVE servers. Interface in English and R
 
 ![Calculator: Ishtar ×5 — build cost, profit and the material tree with build/buy for every node](docs/images/calculator_en.png)
 
+![Ten interface themes: Forge, Graphite, Studio, Fjord, Solarized, Amethyst, Ember, Contrast and the light Daylight and Sandstone](docs/images/themes_en.png)
+
 <details>
 <summary>More screenshots: Schedule and What to build</summary>
 
@@ -34,7 +36,7 @@ bonuses.</sub>
 
 ### Portable build (Windows 10/11, recommended)
 
-1. Download **`Forge_3.0.zip`** from the [Releases](../../releases) page — Python is included,
+1. Download **`Forge_3.1.zip`** from the [Releases](../../releases) page — Python is included,
    nothing to install, no admin rights needed.
 2. Unzip the **whole** folder anywhere (Desktop, Documents…).
 3. Double-click **`Forge.cmd`** — the Forge window opens.
@@ -117,6 +119,9 @@ stations with rigs, market structures, freight, roles and stock — is in the
 - **Reports: 127.0.0.1:8000** — the built-in report server (ports 8000–8010); click to open the
   list of build reports in the browser.
 - **RUS / ENG** — interface language (and language of new HTML reports); switches instantly.
+- **Palette button** — the interface theme: ten of them, each with a live preview — Forge (default),
+  Graphite, Studio, Fjord, Solarized, Amethyst, Ember, Contrast and the light Daylight and Sandstone.
+  Applies instantly and is remembered (`[ui] theme`); HTML reports keep their own look.
 
 ### Overview
 
@@ -147,9 +152,12 @@ Three modes (buttons at the top):
 - **Cheaper to buy** — items the market sells for less than your build cost landed at the build
   location (*Build, Buy, Hub, Savings*). Without groups it scans the whole traded market (~10 s);
   pick EVE groups to narrow it down.
-- **From stock leftovers** — builds from your own blueprints with the highest *real* profit (build
-  cost minus what's already in stock). The batch size is chosen automatically to use up the scarcest
-  material shared with stock (*Runs, Real profit, Real ROI, From stock, % of cost*). Option
+- **From stock leftovers** — builds with the highest *real* profit (build cost minus what's already
+  in stock). The batch size is chosen automatically to use up the scarcest material shared with stock
+  (*Blueprint, Runs, Real profit, Real ROI, From stock, % of cost*). *Own blueprints only* (on by
+  default) — candidates come from your blueprints; uncheck it and only the leftovers decide:
+  everything buildable is scanned (about a minute) and the *Blueprint* column shows what you'd still
+  need — *own*, *invention*, *manual* price or *none* (then the blueprint is costed at 0). Option
   *excluding build reservations* — don't offer what unfinished builds have reserved.
 
 ### Calculator

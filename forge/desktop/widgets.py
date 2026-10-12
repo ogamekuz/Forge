@@ -210,12 +210,12 @@ def section(text: str) -> QLabel:
 
 
 _VARIANT_ICON = {
-    "primary": lambda: theme.tone_text("cyan"),
+    "primary": lambda: theme.active().primary.fg,
     "gold": lambda: theme.tone_text("gold"),
     "good": lambda: theme.tone_text("green"),
-    "danger": lambda: theme.tone_text("red"),
-    "hero": lambda: "#eafaff",
-    "hero-gold": lambda: "#fff6e3",
+    "danger": lambda: theme.active().danger.fg,
+    "hero": lambda: theme.active().hero.fg,
+    "hero-gold": lambda: theme.active().hero_gold.fg,
     "link": lambda: theme.tone_text("cyan"),
 }
 
@@ -285,11 +285,11 @@ def confirm(parent, title: str, text: str, ok: str = N_("Удалить"), cance
 # ---------------------------------------------------------------------------
 
 class IconChip(QWidget):
-    """Квадратик с иконкой в тоне."""
+    """Квадратик с иконкой в тоне. ``spec`` — тема вместо активной (предпросмотр тем)."""
 
-    def __init__(self, icon="spark", tone="cyan", size=28, parent=None):
+    def __init__(self, icon="spark", tone="cyan", size=28, parent=None, spec=None):
         super().__init__(parent)
-        self._icon, self._tone, self._size = icon, tone, size
+        self._icon, self._tone, self._size, self._spec = icon, tone, size, spec
         self.setFixedSize(size, size)
 
     def set(self, icon=None, tone=None):
@@ -301,21 +301,25 @@ class IconChip(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = QRectF(0.5, 0.5, self._size - 1, self._size - 1)
-        p.setPen(theme.qcolor(self._tone, 0.26))
-        p.setBrush(theme.qcolor(self._tone, 0.10))
-        p.drawRoundedRect(r, self._size * 0.28, self._size * 0.28)
+        p.setPen(theme.qcolor(self._tone, 0.26, self._spec))
+        p.setBrush(theme.qcolor(self._tone, 0.10, self._spec))
+        radius = min(self._size * 0.28, (self._spec or theme.active()).radius_tile)
+        p.drawRoundedRect(r, radius, radius)
         s = int(self._size * 0.54)
-        pm = theme.icon_pixmap(self._icon, theme.tone_text(self._tone), s,
+        pm = theme.icon_pixmap(self._icon, theme.tone_text(self._tone, self._spec), s,
                                self.devicePixelRatioF())
         p.drawPixmap(int((self._size - s) / 2), int((self._size - s) / 2), pm)
 
 
 def _paint_corners(widget: QWidget, tone: str = "cyan", alpha: float = 0.55, arm: float = 11.0,
-                   radius: float = 16.0):
-    """Уголки-скобы (мотив окон клиента EVE): слева сверху и справа снизу."""
+                   radius: float = 16.0, spec=None):
+    """Уголки-скобы (мотив окон клиента EVE): слева сверху и справа снизу — в темах, где они
+    есть (``Theme.corner_brackets``)."""
+    if not (spec or theme.active()).corner_brackets:
+        return
     p = QPainter(widget)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    pen = QPen(theme.qcolor(tone, alpha))
+    pen = QPen(theme.qcolor(tone, alpha, spec))
     pen.setWidthF(1.4)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
@@ -335,14 +339,16 @@ def _paint_corners(widget: QWidget, tone: str = "cyan", alpha: float = 0.55, arm
 
 class Card(QFrame):
     """Стеклянная панель с необязательной шапкой: иконка + заголовок слева, мета/кнопки
-    справа. Содержимое — в ``.body``. Уголки-скобы — в тоне шапки."""
+    справа. Содержимое — в ``.body``. Уголки-скобы — в тоне шапки. ``spec`` — тема вместо
+    активной (предпросмотр тем)."""
 
     def __init__(self, title=None, icon=None, tone="cyan", meta=None, parent=None,
-                 margins=(18, 16, 18, 18), spacing=12, corners=True):
+                 margins=(18, 16, 18, 18), spacing=12, corners=True, spec=None):
         super().__init__(parent)
         self.setProperty("card", "panel")
         self._tone = tone
         self._corners = corners
+        self._spec = spec
         outer = QVBoxLayout(self)
         outer.setContentsMargins(*margins)
         outer.setSpacing(spacing)
@@ -354,10 +360,10 @@ class Card(QFrame):
             head = QHBoxLayout()
             head.setSpacing(10)
             if icon:
-                self.chip = IconChip(icon, tone)
+                self.chip = IconChip(icon, tone, spec=spec)
                 head.addWidget(self.chip)
             self.title = label(title, "title")
-            self.title.setFont(theme.font(15, 600, display=True))
+            self.title.setFont(theme.font(15, 600, display=True, spec=spec))
             head.addWidget(self.title)
             head.addStretch(1)
             head.addWidget(self.meta)
@@ -374,7 +380,7 @@ class Card(QFrame):
     def paintEvent(self, e):
         super().paintEvent(e)
         if self._corners:
-            _paint_corners(self, self._tone, 0.45)
+            _paint_corners(self, self._tone, 0.45, spec=self._spec)
 
 
 class StatCard(QFrame):
@@ -477,12 +483,14 @@ class ClickFrame(QFrame):
 # ---------------------------------------------------------------------------
 
 class Segmented(QFrame):
-    """Табы-сегменты. options: [(key, text, icon|None), ...]."""
+    """Табы-сегменты. options: [(key, text, icon|None), ...]. ``spec`` — тема вместо активной
+    (предпросмотр тем)."""
 
     changed = Signal(str)
 
-    def __init__(self, options, value=None, small=False, parent=None):
+    def __init__(self, options, value=None, small=False, parent=None, spec=None):
         super().__init__(parent)
+        self._spec = spec
         self.setProperty("seg", True)
         if small:
             self.setProperty("small", True)
@@ -499,7 +507,6 @@ class Segmented(QFrame):
             b.setCheckable(True)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             if icon:
-                b.setIcon(theme.icon(icon, theme.MUTED, 14))
                 b.setIconSize(QSize(14, 14))
             b.setProperty("icon_name", icon)
             self._group.addButton(b)
@@ -512,10 +519,11 @@ class Segmented(QFrame):
         self.set_value(value, emit=False)
 
     def _paint_icons(self):
+        t = self._spec or theme.active()
         for b in self._buttons.values():
             name = b.property("icon_name")
             if name:
-                b.setIcon(theme.icon(name, "#eafaff" if b.isChecked() else theme.MUTED, 14))
+                b.setIcon(theme.icon(name, t.tab_active.fg if b.isChecked() else t.muted, 14, t.faint))
 
     def _on_toggled(self, key, on):
         self._paint_icons()
@@ -574,9 +582,9 @@ class StatusLine(QLabel):
 class PulseDot(QWidget):
     """Точка статуса со свечением; пульсирует."""
 
-    def __init__(self, color=theme.CYAN, size=8, pulse=False, parent=None):
+    def __init__(self, color=None, size=8, pulse=False, parent=None):
         super().__init__(parent)
-        self._color = QColor(color)
+        self._color = QColor(color or theme.CYAN)
         self._size = size
         self._k = 1.0
         self.setFixedSize(size + 8, size + 8)
@@ -626,27 +634,26 @@ class PulseDot(QWidget):
 
 
 class Pill(ClickFrame):
-    """«Пилюля» статуса в шапке: точка + текст."""
+    """«Пилюля» статуса в шапке: точка + текст. ``spec`` — тема вместо активной (предпросмотр
+    тем)."""
 
-    TONE_COLORS: ClassVar[dict[str, str]] = {"ok": theme.GREEN, "err": theme.RED, "warn": theme.GOLD,
-                                           "info": theme.CYAN}
-
-    def __init__(self, text="", kind="info", parent=None):
+    def __init__(self, text="", kind="info", parent=None, spec=None):
         super().__init__(parent)
+        self._dots = (spec or theme.active()).dots
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 5, 14, 5)
         lay.setSpacing(4)
         self.setMinimumHeight(30)
-        self.dot = PulseDot(self.TONE_COLORS[kind], 8)
+        self.dot = PulseDot(self._dots[kind], 8)
         lay.addWidget(self.dot)
         self.text = QLabel(text)
-        self.text.setFont(theme.font(13, 500))
+        self.text.setFont(theme.font(13, 500, spec=spec))
         lay.addWidget(self.text)
         self.set_state(kind, text)
 
     def set_state(self, kind, text, pulse=None):
         set_prop(self, "pill", kind, deep=True)
-        self.dot.set_color(self.TONE_COLORS.get(kind, theme.CYAN))
+        self.dot.set_color(self._dots.get(kind, self._dots["info"]))
         self.dot.set_pulsing(kind == "ok" if pulse is None else pulse)
         self.text.setText(text)
 
@@ -674,9 +681,9 @@ class LinkPill(ClickFrame):
 class BusyDots(QWidget):
     """Три «печатающие» точки — идёт расчёт."""
 
-    def __init__(self, color=theme.CYAN, parent=None):
+    def __init__(self, color=None, parent=None):
         super().__init__(parent)
-        self._color = QColor(color)
+        self._color = QColor(color or theme.CYAN)
         self._t = 0.0
         self.setFixedSize(30, 14)
         self._anim = QVariantAnimation(self)
@@ -740,23 +747,31 @@ class Busy(QWidget):
 # ---------------------------------------------------------------------------
 
 class Logo(QWidget):
-    def __init__(self, size=40, parent=None):
+    def __init__(self, size=40, parent=None, spec=None):
         super().__init__(parent)
         self._size = size
+        self._spec = spec
         self.setFixedSize(size, size)
 
     def paintEvent(self, _e):
         p = QPainter(self)
-        p.drawPixmap(0, 0, theme.logo_pixmap(self._size, self.devicePixelRatioF()))
+        p.drawPixmap(0, 0, theme.logo_pixmap(self._size, self.devicePixelRatioF(), spec=self._spec))
 
 
 class BrandTitle(QWidget):
-    """Название с переливающимся градиентом cyan → золото (7 с на цикл)."""
+    """Название в шапке цветами темы (``Theme.brand``): у Forge — градиент cyan → золото,
+    переливающийся за 7 с; в темах без эффектов — неподвижное. ``spec`` — тема вместо активной,
+    ``animate=False`` — без перелива (предпросмотр тем)."""
 
-    def __init__(self, text, px=28, parent=None):
+    # позиции пяти стопов перелива; иное число стопов ложится равномерно
+    _POSITIONS = (0.0, 0.33, 0.55, 0.78, 1.0)
+
+    def __init__(self, text, px=28, parent=None, spec=None, animate=True):
         super().__init__(parent)
+        t = spec or theme.active()
         self._text = text
-        self._font = theme.font(px, 700, display=True, spacing=104)
+        self._stops = t.brand
+        self._font = theme.font(px, 700, display=True, spacing=104, spec=spec)
         fm = QFontMetricsF(self._font)
         self._ascent = fm.ascent()
         self.setFixedSize(math.ceil(fm.horizontalAdvance(text) * 1.06) + 6, math.ceil(fm.height()) + 2)
@@ -767,7 +782,8 @@ class BrandTitle(QWidget):
         self._anim.setDuration(7000)
         self._anim.setLoopCount(-1)
         self._anim.valueChanged.connect(self._tick)
-        self._anim.start()
+        if animate and t.effects and len(self._stops) > 1:
+            self._anim.start()
 
     def _tick(self, v):
         self._phase = v
@@ -776,26 +792,34 @@ class BrandTitle(QWidget):
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addText(1, self._ascent, self._font, self._text)
+        stops = self._stops
+        if len(stops) == 1:
+            p.fillPath(path, QColor(stops[0]))
+            return
         w = max(1.0, float(self.width()))
         x0 = -self._phase * 2 * w
         g = QLinearGradient(x0, 0, x0 + 2 * w, 0)
         g.setSpread(QGradient.Spread.RepeatSpread)
-        for pos, col in ((0.0, "#3fb8e0"), (0.33, "#a9e4f7"), (0.55, "#e8a93a"),
-                         (0.78, "#7fd0ec"), (1.0, "#3fb8e0")):
+        positions = (self._POSITIONS if len(stops) == len(self._POSITIONS)
+                     else tuple(i / (len(stops) - 1) for i in range(len(stops))))
+        for pos, col in zip(positions, stops, strict=True):
             g.setColorAt(pos, QColor(col))
-        path = QPainterPath()
-        path.addText(1, self._ascent, self._font, self._text)
         p.fillPath(path, g)
 
 
 class Backdrop(QWidget):
-    """Фон окна — глубокий космос EVE: вертикальный градиент, туманности (cyan слева, золото-
-    оранжевая справа) и мерцающие звёзды над шапкой."""
+    """Фон окна по теме: вертикальный градиент (``Theme.backdrop``), а в темах с эффектами
+    (Forge — глубокий космос EVE) ещё туманности (cyan слева, золото-оранжевая справа) и
+    мерцающие звёзды над шапкой. ``spec`` — тема вместо активной, ``animate=False`` — звёзды не
+    мерцают (предпросмотр тем)."""
 
-    def __init__(self, star_zone=150, parent=None):
+    def __init__(self, star_zone=150, parent=None, spec=None, animate=True):
         super().__init__(parent)
         self.setObjectName("Root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+        self._theme = spec or theme.active()
         self._star_zone = star_zone
         rnd = random.Random(12)  # noqa: S311 — узор звёзд, не криптография
         self._stars = [(rnd.random(), rnd.random(), rnd.uniform(0.5, 1.4),
@@ -804,7 +828,8 @@ class Backdrop(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(110)
         self._timer.timeout.connect(self._tick)
-        self._timer.start()
+        if animate and self._theme.effects:
+            self._timer.start()
 
     def _tick(self):
         if not self.isVisible() or self.window().isMinimized():
@@ -816,11 +841,14 @@ class Backdrop(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
+        top, middle, bottom = self._theme.backdrop
         g = QLinearGradient(0, 0, 0, h)
-        g.setColorAt(0.0, QColor(theme.BG1))
-        g.setColorAt(0.6, QColor(theme.BG0))
-        g.setColorAt(1.0, QColor(theme.BG_DEEP))
+        g.setColorAt(0.0, QColor(top))
+        g.setColorAt(0.6, QColor(middle))
+        g.setColorAt(1.0, QColor(bottom))
         p.fillRect(e.rect(), g)
+        if not self._theme.effects:
+            return
         # туманности: cyan слева сверху, золото/оранж справа сверху, слабый пурпур внизу справа
         for fx, fy, rx, ry, rgb, a, stop in ((0.06, -0.12, 1100, 600, (63, 184, 224), 30, 0.58),
                                              (0.97, -0.08, 950, 560, (232, 150, 58), 22, 0.55),
@@ -1241,7 +1269,7 @@ class SearchPicker(QLineEdit):
         self._popup.setProperty("popup", True)
         self._popup.setStyleSheet(
             f"QListWidget {{ background: {theme.POPUP}; border: 1px solid {theme.LINE_STRONG};"
-            f" border-radius: 10px; padding: 4px; }}")
+            f" border-radius: {theme.active().radius_menu}px; padding: 4px; }}")
         self._popup.setIconSize(QSize(22, 22))
         self._popup.itemClicked.connect(self._choose)
         self._popup.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -1481,7 +1509,8 @@ class DataTable(QTableWidget):
                 hl.setContentsMargins(4, 2, 4, 2)
                 b = button(action_text, "plus", "primary", tip=tip, icon_size=12)
                 b.setProperty("variant", "primary")
-                b.setStyleSheet("padding: 2px 10px; border-radius: 10px; font-size: 12px;")
+                b.setStyleSheet(f"padding: 2px 10px; border-radius: {min(10, theme.active().radius_button)}px;"
+                                " font-size: 12px;")
                 b.clicked.connect(lambda _=False, row=row, f=cb: f(row))
                 hl.addWidget(b)
                 self.setCellWidget(r, len(self._cols), holder)
@@ -1515,10 +1544,12 @@ class DataTable(QTableWidget):
 
 
 class ProgressLine(QWidget):
-    """Тонкая полоса прогресса cyan → золото (как «кольцо» в отчёте)."""
+    """Тонкая полоса прогресса цветами темы (``Theme.progress``; у Forge — cyan → золото, как
+    «кольцо» в отчёте). ``spec`` — тема вместо активной (предпросмотр тем)."""
 
-    def __init__(self, value: float = 0.0, height: int = 6, parent=None):
+    def __init__(self, value: float = 0.0, height: int = 6, parent=None, spec=None):
         super().__init__(parent)
+        self._spec = spec
         self._v = max(0.0, min(1.0, value))
         self.setFixedHeight(height)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -1533,12 +1564,13 @@ class ProgressLine(QWidget):
         r = QRectF(0, 0, self.width(), self.height())
         rad = self.height() / 2
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(theme.qcolor(theme.COOL, 0.08))
+        t = self._spec or theme.active()
+        p.setBrush(theme.qcolor(t.wash, 0.08))
         p.drawRoundedRect(r, rad, rad)
         if self._v > 0:
             g = QLinearGradient(0, 0, self.width(), 0)
-            g.setColorAt(0, QColor(theme.CYAN))
-            g.setColorAt(1, QColor(theme.GOLD))
+            g.setColorAt(0, QColor(t.progress[0]))
+            g.setColorAt(1, QColor(t.progress[1]))
             p.setBrush(g)
             p.drawRoundedRect(QRectF(0, 0, max(self.height(), self.width() * self._v), self.height()),
                               rad, rad)

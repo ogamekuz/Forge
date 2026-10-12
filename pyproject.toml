@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge"
-version = "3.0.0"
+version = "3.1.0"
 description = "Local industry assistant for EVE Online: exact materials, real build cost, schedule, what to build"
 readme = "README.md"
 license = "MIT"
@@ -60,7 +60,7 @@ forge-desktop = "forge.desktop.app:main"
 include = ["forge*"]
 
 [tool.setuptools.package-data]
-"forge.desktop" = ["assets/*.svg", "assets/*.ico", "assets/*.png"]
+"forge.desktop" = ["assets/*.ico", "assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

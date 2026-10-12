@@ -1,5 +1,5 @@
 """Точка входа пульта Forge на PySide6: ``pythonw -m forge.desktop`` / ``forge-desktop`` /
-``forge desktop`` / ярлык «Forge 3.0».
+``forge desktop`` / ярлык «Forge».
 
 Под pythonw консоли нет — необработанные ошибки пишем в ``forge_desktop.log`` рядом с
 forge.toml и показываем окно с текстом ошибки.
@@ -77,11 +77,12 @@ def main(argv: list[str] | None = None) -> int:
 
     from ..i18n import tr
     from . import theme
-    from .main_window import MainWindow
+    from .main_window import MainWindow, config_ui
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("Forge")
     app.setOrganizationName("Forge")
+    theme.activate(config_ui(config_path)[1])  # тема из [ui] theme — до первого виджета
     theme.apply(app)
     QApplication.setWindowIcon(theme.app_icon())
     try:

@@ -1,5 +1,5 @@
 @echo off
-rem Forge 3.0 - desktop control panel (PySide6), no console window.
+rem Forge - desktop control panel (PySide6), no console window.
 rem The panel starts its own local report server (127.0.0.1, ports 8000-8010).
 cd /d "%~dp0"
 if not exist ".venv\Scripts\pythonw.exe" (

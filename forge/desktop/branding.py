@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .. import __version__
+
+# Версия на вывеске (шапка, заголовок окна): «3.1» из «3.1.0», а у исправлений — целиком («3.1.2»).
+VERSION = ".".join(__version__.split(".")[:2]) if __version__.endswith(".0") else __version__
+
 
 @dataclass(frozen=True)
 class Entity:

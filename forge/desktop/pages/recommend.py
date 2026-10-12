@@ -46,6 +46,20 @@ def _tone_sign(v, _r=None):
     return None if v is None else ("green" if v >= 0 else "red")
 
 
+# «Из остатков», колонка «Чертёж»: источник чертежа продукта → (подпись, тон, подсказка).
+_BP_OWN = (N_("свой"), "green", N_("Чертёж есть у персонажей — можно строить сейчас."))
+_BP_NONE = (N_("нет"), "red", N_("Чертежа нет, и его цена в расчёте — 0: сначала добудь чертёж (или задай "
+                                 "цену в «Настройки → Чертежи»)."))
+_BP_LABEL = {
+    "owned_bpo": _BP_OWN,
+    "owned_bpc": _BP_OWN,
+    "owned_bpc_insufficient": (N_("свой"), "gold", N_("Своя копия есть, но её прогонов на всю партию не "
+                                                      "хватит.")),
+    "invention": (N_("инвента"), "gold", N_("Чертежа нет: в себестоимости — цена инвенты.")),
+    "manual": (N_("вручную"), "gold", N_("Цена чертежа задана вручную («Настройки → Чертежи»).")),
+}
+
+
 class GroupFilter(QWidget):
     """Фильтр по EVE-группам: чипы + поиск. ``ids()`` — выбранные group_id."""
 
@@ -319,13 +333,20 @@ class RecommendPage(Page):
     def _build_stock(self, cfg):
         scroll, body = scroll_page()
         f = Card(tr("Что построить из остатков"), "boxes", "gold")
-        f.body.addWidget(label(tr("Ищет среди своих чертежей постройки с максимальной реальной прибылью "
-                                  "(себестоимость минус то, что уже лежит на складе) и использованием остатков. "
-                                  "Размер партии подбирается сам — чтобы вычерпать самый дефицитный "
-                                  "пересекающийся со складом материал. Что считать складом — вкладка «Склад»."),
-                               "muted", wrap=True))
+        f.body.addWidget(label(tr("Ищет постройки с максимальной реальной прибылью (себестоимость минус то, "
+                                  "что уже лежит на складе) и использованием остатков: среди своих чертежей "
+                                  "либо, без галки «Только свои чертежи», среди всего производимого — тогда "
+                                  "решают только остатки. Размер партии подбирается сам — чтобы вычерпать "
+                                  "самый дефицитный пересекающийся со складом материал. Что считать складом — "
+                                  "вкладка «Склад»."), "muted", wrap=True))
         row = QHBoxLayout()
         row.setSpacing(14)
+        self.s_owned = check(tr("Только свои чертежи"), True, tr(
+            "Кандидаты — из чертежей персонажей (в локациях «Где искать чертежи»). Снять — из всего "
+            "производимого: решают только остатки, а чертёж считается как в Калькуляторе — инвента или "
+            "«Стоимость чертежей вручную», иначе его цена 0 и в колонке «Чертёж» стоит «нет». Перебор "
+            "всего рынка идёт около минуты — сузить можно группами и «Лимитом кандидатов»."))
+        row.addWidget(self.s_owned, 0, Qt.AlignmentFlag.AlignBottom)
         self.s_minvol = NumberEdit(None, tr("нет"), width=100)
         self.s_top = NumberEdit(cfg.ui.stock_top, integer=True, width=70)
         self.s_limit = NumberEdit(None, tr("все"), integer=True, width=90)
@@ -341,7 +362,7 @@ class RecommendPage(Page):
         row.addWidget(self.s_go, 0, Qt.AlignmentFlag.AlignBottom)
         f.body.addLayout(row)
         self.s_groups = GroupFilter(self.svc, tr("Только эти EVE-группы продуктов (напр. Cruiser)…"),
-                                    tr("группы не выбраны — все свои чертежи"))
+                                    tr("группы не выбраны — все кандидаты"))
         f.body.addWidget(self.s_groups)
         self.s_liq = label("", "faint", wrap=True)
         f.body.addWidget(self.s_liq)
@@ -353,6 +374,9 @@ class RecommendPage(Page):
         self.s_card = Card(tr("Результат"), "list", "green")
         self.s_table = DataTable([
             Col("name", tr("Предмет"), icon_key="product_type_id", stretch=True),
+            Col("blueprint_source", tr("Чертёж"), lambda v, _r: tr(_BP_LABEL.get(v, _BP_NONE)[0]),
+                tone=lambda v, _r: _BP_LABEL.get(v, _BP_NONE)[1],
+                tip=lambda v, _r: tr(_BP_LABEL.get(v, _BP_NONE)[2])),
             Col("runs", tr("Прогонов"), align="right"),
             Col("real_profit", tr("Реальная прибыль"), lambda v, _r: fmt_isk_short(v), "right", tone=_tone_sign),
             Col("real_roi", tr("Реальный ROI"), lambda v, _r: fmt_pct(v), "right", tone=_tone_sign),
@@ -368,12 +392,14 @@ class RecommendPage(Page):
         return scroll
 
     def _run_stock(self):
+        owned = self.s_owned.isChecked()
         minvol = self.s_minvol.value()
         top = self.s_top.int_value(30)
         limit = self.s_limit.int_value(0) or None
         groups = self.s_groups.ids()
         res_ = self.s_res.isChecked()
-        self.s_busy.start(tr("Сверяю склад с чертежами…"))
+        self.s_busy.start(tr("Сверяю склад с чертежами…") if owned
+                          else tr("Сверяю склад со всем, что производится (около минуты)…"))
         self.s_go.setEnabled(False)
         self.s_err.clear_msg()
 
@@ -387,7 +413,10 @@ class RecommendPage(Page):
             self.s_card.set_meta(tr("{n} поз.", n=len(rows)))
             self.s_table.set_rows(rows)
             self.s_table.fit_height(40)
-            if not rows:
+            if not rows and owned:
                 self.s_err.show_msg("info", tr("Ничего не нашлось — склад пуст (проверь вкладку «Склад») или ни "
                                                "один свой чертёж не пересекается с тем, что на нём лежит."))
-        run_bg(lambda: self.svc.recommend_stock(top, minvol, limit, groups, res_), done)
+            elif not rows:
+                self.s_err.show_msg("info", tr("Ничего не нашлось — склад пуст (проверь вкладку «Склад») или из "
+                                               "того, что на нём лежит, ничего продаваемого не строится."))
+        run_bg(lambda: self.svc.recommend_stock(top, minvol, limit, groups, res_, owned), done)

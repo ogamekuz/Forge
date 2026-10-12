@@ -192,8 +192,9 @@ def create_app(config_path: str = config_mod.DEFAULT_CONFIG_PATH) -> FastAPI:
 
     @app.get("/api/recommend-stock")
     def recommend_stock(top: int = 30, min_volume: float | None = None,
-                        limit: int | None = None, groups: str | None = None) -> list[dict]:
-        return svc.recommend_stock(top, min_volume, limit, parse_csv_ints(groups or ""))
+                        limit: int | None = None, groups: str | None = None,
+                        owned: bool = True) -> list[dict]:
+        return svc.recommend_stock(top, min_volume, limit, parse_csv_ints(groups or ""), owned=owned)
 
     @app.get("/api/recommend/grouped")
     def recommend_grouped(owned: bool = True, runs: int | None = None,

@@ -18,10 +18,11 @@ from typing import Any, Self
 
 import httpx
 
+from .. import __version__
 from ..i18n import tr
 
 ESI_BASE = "https://esi.evetech.net"
-USER_AGENT = "forge/0.1 (personal EVE industry helper)"
+USER_AGENT = f"forge/{__version__} (personal EVE industry helper)"
 
 # Параметры backoff на 420/429.
 MAX_RETRIES = 5

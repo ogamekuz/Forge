@@ -16,6 +16,7 @@ from PySide6.QtCore import QObject, QStandardPaths, QUrl, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
+from .. import __version__
 from . import theme
 
 URL = "https://images.evetech.net/types/{tid}/icon?size={size}"
@@ -24,7 +25,7 @@ ENTITY_URLS = {
     "corporation": "https://images.evetech.net/corporations/{id}/logo?size={size}",
     "character": "https://images.evetech.net/characters/{id}/portrait?size={size}",
 }
-USER_AGENT = "forge/3.0 (personal EVE industry helper)"
+USER_AGENT = f"forge/{__version__} (personal EVE industry helper)"
 
 
 def _get(net: QNetworkAccessManager, url: str) -> QNetworkReply:
@@ -90,6 +91,12 @@ class TypeIcons(QObject):
         p.drawRoundedRect(4, 4, 56, 56, 12, 12)
         p.end()
         return pm
+
+    @classmethod
+    def retheme(cls) -> None:
+        """Заглушка — в тоне активной темы (после смены темы на ходу)."""
+        if cls._instance is not None:
+            cls._instance._placeholder = cls._make_placeholder()
 
     def has(self, tid: int) -> bool:
         return tid in self._mem

@@ -2,7 +2,8 @@
 
 В отличие от ``engine.recommend`` (там себестоимость всегда полное замещение, склад не
 учитывается вообще, см. правило проекта «core остатки не нетит») — здесь для каждого
-кандидата (из своих чертежей) отдельно считается РЕАЛЬНАЯ прибыль: полная себестоимость минус
+кандидата (из своих чертежей либо, ``owned=False``, из всего производимого — тогда решают
+только остатки) отдельно считается РЕАЛЬНАЯ прибыль: полная себестоимость минус
 ISK-стоимость материалов, которые реально списались бы со склада при этой постройке. Кандидаты
 ранжируются по ДВУМ метрикам сразу (нормировано, как и в ``engine.recommend``): реальная
 прибыль И доля себестоимости, покрытая складом — цель не просто «выгодно», а «выгодно и при
@@ -43,6 +44,10 @@ class StockRecommendation:
     isk_per_hour: float
     daily_volume: float
     score: float = 0.0
+    # Откуда чертёж верхнего продукта (``NodeResult.blueprint_source``): owned_bpo|owned_bpc|
+    # owned_bpc_insufficient — свой; invention|manual — в себестоимости есть его цена; missing|
+    # missing_reaction — чертежа нет, а его цена в расчёте 0 (важно при ``owned=False``).
+    blueprint_source: str = ""
 
 
 def _stock_adjusted_costs(node: NodeResult, stock: dict[int, int]) -> tuple[float, float]:
@@ -126,15 +131,18 @@ def recommend_by_stock(
     limit_candidates: int | None = None,
     group_ids: list[int] | None = None,
     reserved: dict[int, int] | None = None,
+    owned: bool = True,
 ) -> list[StockRecommendation]:
-    """Отранжировать СВОИ чертежи по (реальная прибыль, доля себестоимости со склада).
+    """Отранжировать кандидатов по (реальная прибыль, доля себестоимости со склада).
 
     Склад — по настройке ``[stock]`` (``core.stock.on_hand``), за вычетом ``reserved`` —
     того, что уже зарезервировали под себя незавершённые стройки (``report.
     external_reservations``): иначе вкладка предлагала бы пустить в дело то, что уже обещано.
 
-    Только ``owned=True`` (candidate_products) — рекомендация имеет смысл только для того,
-    что реально можно построить прямо сейчас. Кандидаты без ХОТЬ КАКОГО-ТО пересечения со
+    ``owned=True`` (по умолчанию) — кандидаты только из СВОИХ чертежей: то, что реально можно
+    построить прямо сейчас. ``owned=False`` — из всего производимого: решают только остатки, а
+    чертёж считается как в Калькуляторе (инвента, ручная цена, иначе 0 с пометкой «нет» —
+    ``StockRecommendation.blueprint_source``). Кандидаты без ХОТЬ КАКОГО-ТО пересечения со
     складом (``stock_value == 0``) отфильтровываются — иначе выдача не отличалась бы от
     обычного ``engine.recommend`` (эта вкладка — специально про использование остатков).
 
@@ -153,8 +161,12 @@ def recommend_by_stock(
     liq = Liquidity(conn, cfg, params.jita_region_id)
 
     recs: list[StockRecommendation] = []
-    for type_id in candidate_products(conn, owned=True, limit=limit_candidates, group_ids=group_ids,
+    for type_id in candidate_products(conn, owned=owned, limit=limit_candidates, group_ids=group_ids,
                                       location_ids=params.blueprint_location_ids, cfg=cfg):
+        # Нет цены в месте сбыта — нет прибыли (``profit.compute_profit``): такого кандидата
+        # отбросили бы и после расчёта, а без «своих» их тысячи — отсекаем до дорогой оценки.
+        if prices.sale_price(conn, type_id, sell_region, params.sell_price) is None:
+            continue
         probe = core.estimate_build(conn, cfg, type_id, runs=1, streams=1, params=params)
         if probe.node.activity_id == 0 or probe.node.produced == 0:
             continue
@@ -199,6 +211,7 @@ def recommend_by_stock(
             capital=node.total_cost, real_capital=real_capital, stock_value=stock_value,
             stock_utilization=stock_utilization, unit_cost=node.unit_cost,
             real_profit=real_profit, real_roi=real_roi, isk_per_hour=isk_hour, daily_volume=vol,
+            blueprint_source=node.blueprint_source,
         ))
 
     if not recs:

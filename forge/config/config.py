@@ -358,6 +358,9 @@ class Ui(BaseModel):
     stock_top: int = 30
     # Язык пульта и HTML-отчётов: "ru" (по умолчанию) или "en" — переключатель RUS/ENG в шапке.
     lang: str = "ru"
+    # Тема оформления пульта (окно «Тема» в шапке): forge (по умолчанию), graphite, studio, fjord,
+    # solarized, amethyst, ember, contrast, daylight, sandstone. Неизвестное имя — forge.
+    theme: str = "forge"
 
 
 class FreightRoute(BaseModel):

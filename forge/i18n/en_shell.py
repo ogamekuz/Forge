@@ -1,5 +1,5 @@
-"""Английские переводы: шапка, вкладки, общие виджеты пульта (main_window, widgets, app, donate,
-server, state) и общие слова (единицы времени).
+"""Английские переводы: шапка, вкладки, темы, общие виджеты пульта (main_window, widgets, app, donate,
+server, state, themes, theme_dialog) и общие слова (единицы времени).
 
 Ключ — русская строка ровно как в коде (с подстановками {name}), значение — английская."""
 
@@ -34,7 +34,7 @@ EN: dict[str, str] = {
     "Персонажи": "Characters",
     "Настройки": "Settings",
     # --- шапка, статус
-    "Forge 3.0 — индустрия EVE Online": "Forge 3.0 — EVE Online industry",
+    "Forge {version} — индустрия EVE Online": "Forge {version} — EVE Online industry",
     "индустрия EVE Online": "EVE Online industry",
     "Поддержать": "Support",
     "Донат автору — ISK персонажу {name} в игре": "Donate to the author — ISK to {name} in game",
@@ -45,6 +45,36 @@ EN: dict[str, str] = {
         "Local server for HTML build reports (127.0.0.1 only)",
     "Язык интерфейса и новых HTML-отчётов": "Language of the interface and of new HTML reports",
     "Язык не сохранён в настройках: {error}": "Language not saved to settings: {error}",
+    # --- тема оформления (кнопка-палитра в шапке, окно «Тема»)
+    "Тема оформления": "Theme",
+    "Тема не сохранена в настройках: {error}": "Theme not saved to settings: {error}",
+    "Текущая": "Current",
+    "Тёмная": "Dark",
+    "Светлая": "Light",
+    "Применить": "Apply",
+    "Оставить эту тему": "Keep this theme",
+    "Тема применяется сразу и запоминается. Окно при этом пересобирается — несохранённые правки на "
+    "вкладках (например, в «Настройках») пропадут. HTML-отчёты от темы не зависят.":
+        "The theme applies at once and is remembered. The window is rebuilt, so unsaved edits on the tabs "
+        "(e.g. in “Settings”) are lost. HTML reports don't depend on the theme.",
+    "Космос EVE: cyan Photon, золото Omega, звёзды и уголки-скобы":
+        "EVE space: Photon cyan, Omega gold, stars and corner brackets",
+    "Строгий графит: тушь, серые, красный акцент, Arial": "Strict graphite: ink, greys, a red accent, Arial",
+    "Нейтральный уголь, как редактор кода: плоско, спокойно, синий Fluent":
+        "Neutral charcoal like a code editor: flat, quiet, Fluent blue",
+    "Полярная ночь: сланцево-синие тона, морозный cyan, мягкий контраст":
+        "Polar night: slate blues, frost cyan, soft contrast",
+    "Solarized dark: глубокий бирюзовый фон, синий и жёлтый акценты":
+        "Solarized dark: deep teal ground, blue and yellow accents",
+    "Ночь в стиле Dracula: фиолетовый с розовым, мятным и cyan":
+        "Dracula-style night: violet with pink, mint and cyan",
+    "Факел в ночи: тёплый уголь, оранжевый акцент, стальной синий":
+        "A flare at night: warm charcoal, orange accent, steel blue",
+    "Высокий контраст для проектора и уставших глаз: чёрный, белый, cyan":
+        "High contrast for projectors and tired eyes: black, white, cyan",
+    "Светлая: белые панели, тёмный текст, синий акцент — для ярких комнат":
+        "Light: white panels, dark text, blue accent — for bright rooms",
+    "Светлая и тёплая, как бумага: песок, бирюза и охра": "Light and warm like paper: sand, teal and ochre",
     "персонажи": "characters",
     "рынок и индексы": "market & indices",
     "ни разу": "never",

@@ -65,10 +65,26 @@ sync → ingest → storage ← core ← (recommend, planner) ← web.service �
 - `httpx` (ESI), `pydantic` (модели), `typer` (CLI), `pytest` (тесты), `ruff` + `mypy`.
 - Пульт — **PySide6** (`forge/desktop`): Qt-шелл, тяжёлое — в фоновых потоках (`widgets.run_bg`),
   мутации Qt только в UI-потоке, `StatusHub` раз в 3 с, геометрия окна — в `.forge/desktop.ini`.
-  Вид — в цветах EVE Online (`desktop/theme.py`: космос, cyan Photon #3fb8e0, золото Omega
-  #e8a93a, уголки-скобы). HTML-отчёты отдаёт встроенный FastAPI на 127.0.0.1 (порт 8000–8010).
+  Вид — тема оформления (ниже); по умолчанию — Forge в цветах EVE Online: космос, cyan Photon
+  #3fb8e0, золото Omega #e8a93a, уголки-скобы. HTML-отчёты отдаёт встроенный FastAPI на 127.0.0.1
+  (порт 8000–8010).
 - Иконки — с EVE Image Server `https://images.evetech.net/types/{type_id}/icon` (грузит интерфейс,
   кэш на диске в `.forge/icons`; в тестах сеть выключена `FORGE_NO_ICON_NET=1`).
+
+## Темы оформления
+
+`[ui] theme` — одна из десяти тем (`forge`, `graphite`, `studio`, `fjord`, `solarized`, `amethyst`,
+`ember`, `contrast`, светлые `daylight`, `sandstone`); окно «Тема» с предпросмотром — кнопка-палитра
+в шапке. `desktop/themes.py` — токены (`Theme`: цвета, шрифты, скругления; без Qt): Forge и Graphite
+расписаны целиком, остальные собирает `_tinted()` из нескольких цветов. `desktop/theme.py` строит из
+активной темы палитру, stylesheet, картинки stylesheet (в кэш), иконки и логотип; `activate()`
+ставит тему и переставляет токены модуля (`theme.TEXT`, `theme.CYAN`…), `apply()` красит приложение.
+Тема меняется на ходу, как язык: `MainWindow.set_theme` пересобирает шапку и страницы — поэтому
+цвет берут при постройке виджета (в теле функции), а не в значении по умолчанию или константе
+класса; свой hex в виджетах не заводить — новый цвет это новое поле `Theme`. `spec=` у функций и
+виджетов со своей отрисовкой — тема вместо активной (предпросмотр в `desktop/theme_dialog.py`).
+Эффекты (звёзды, туманности, перелив названия, скобы) — только у Forge. `tests/test_theme.py`
+проверяет полноту и контраст каждой темы. HTML-отчёты от темы пульта не зависят.
 
 ## Язык интерфейса
 

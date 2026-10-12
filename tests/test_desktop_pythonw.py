@@ -1,4 +1,4 @@
-"""Пульт под pythonw (ярлык «Forge 3.0», Forge.cmd) — без консоли.
+"""Пульт под pythonw (ярлык «Forge», Forge.cmd) — без консоли.
 
 У pythonw ``sys.stdout``/``sys.stderr`` равны ``None``. uvicorn в конструкторе ``Config``
 настраивает свой цветной консольный лог и без потоков падает на ``sys.stdout.isatty()`` — пульт

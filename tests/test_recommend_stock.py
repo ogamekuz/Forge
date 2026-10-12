@@ -158,3 +158,58 @@ def test_recommend_by_stock_excludes_item_without_stock_overlap(conn):
     ids = [r.product_type_id for r in rec.recommend_by_stock(conn, CFG, top=10)]
     assert 2002 not in ids       # Gamma не тянет Тританиум — остаток ей не помогает
     assert 2000 in ids and 2001 in ids
+
+
+def test_recommend_by_stock_can_ignore_blueprint_ownership(conn):
+    """``owned=False`` — «только остатки»: кандидаты из всего производимого, чей бы ни был чертёж.
+    По умолчанию (``owned=True``) — только свои чертежи."""
+    _seed(conn)
+    conn.executescript(
+        """
+        DELETE FROM character_blueprints WHERE type_id = 1001;       -- чертежа Beta больше нет
+        INSERT INTO character_assets(item_id,character_id,type_id,location_id,quantity)
+            VALUES (900,7,34,60005000,5);
+        """
+    )
+    conn.commit()
+    own = rec.recommend_by_stock(conn, CFG, top=10)
+    assert [r.product_type_id for r in own] == [2000]
+    assert own[0].blueprint_source == "owned_bpo"
+
+    every = {r.product_type_id: r for r in rec.recommend_by_stock(conn, CFG, top=10, owned=False)}
+    assert set(every) == {2000, 2001}
+    assert every[2001].blueprint_source == "missing"                 # чертежа нет — так и помечено
+    assert every[2001].stock_value == pytest.approx(5 * 5.0)         # остатки считаются так же
+    assert every[2000].real_profit == pytest.approx(own[0].real_profit)
+
+
+def test_recommend_by_stock_skips_unsellable_before_estimating(conn, monkeypatch):
+    """Нет цены в месте сбыта — нет прибыли: такой кандидат в выдачу не попадает, и дорогая
+    оценка постройки на него не тратится (без «своих» кандидатов тысячи)."""
+    from forge import core
+
+    _seed(conn)
+    conn.executescript(
+        """
+        INSERT INTO sde_types(type_id,name) VALUES (2003,'Unsold');
+        INSERT INTO sde_blueprint_products(blueprint_type_id,activity_id,product_type_id,quantity,probability)
+            VALUES (1003,1,2003,1,1.0);
+        INSERT INTO sde_blueprint_materials(blueprint_type_id,activity_id,material_type_id,quantity)
+            VALUES (1003,1,34,10);
+        INSERT INTO sde_blueprint_activities(blueprint_type_id,activity_id,time_seconds) VALUES (1003,1,600);
+        INSERT INTO character_assets(item_id,character_id,type_id,location_id,quantity)
+            VALUES (900,7,34,60005000,5);
+        """
+    )
+    conn.commit()
+    estimated: list[int] = []
+    real = core.estimate_build
+
+    def spy(conn_, cfg, type_id, *args, **kwargs):
+        estimated.append(type_id)
+        return real(conn_, cfg, type_id, *args, **kwargs)
+
+    monkeypatch.setattr(core, "estimate_build", spy)
+    ids = [r.product_type_id for r in rec.recommend_by_stock(conn, CFG, top=10, owned=False)]
+    assert sorted(ids) == [2000, 2001]
+    assert 2003 not in estimated and {2000, 2001} <= set(estimated)

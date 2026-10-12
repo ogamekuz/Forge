@@ -84,6 +84,13 @@ Secret Key is needed: Forge logs in with OAuth2 PKCE.
 The **RUS / ENG** switch is in the window header. The language changes immediately; new HTML
 reports are written in the selected language.
 
+### Theme
+
+The palette button next to the language switch opens the **Theme** window: ten themes with a live
+preview — Forge (default: EVE space, Photon cyan, Omega gold), Graphite, Studio, Fjord, Solarized, Amethyst, Ember, Contrast and the light Daylight and Sandstone.
+**Apply** repaints the program at once (the window is rebuilt, so save your edits in *Settings*
+first) and stores the choice in `[ui] theme` of `forge.toml`. HTML reports don't depend on it.
+
 ## 3. Static game data (SDE)
 
 The SDE is the game's reference data: items, blueprints, rigs, systems. Without it neither search

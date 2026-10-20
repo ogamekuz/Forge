@@ -28,6 +28,7 @@ bonuses.</sub>
 
 **Contents:** [Installation](#installation) · [First run](#first-run) ·
 [Step-by-step setup guide](docs/SETUP.md) ·
+[Setup video](https://github.com/ogamekuz/Forge/releases/download/v3.1.0/Forge3_setup_EN.mp4) ·
 [How Forge calculates](#how-forge-calculates) · [The program, tab by tab](#the-program-tab-by-tab) ·
 [Settings](#settings) · [Configuration file](#configuration-file) · [Command line](#command-line) ·
 [Data and privacy](#data-and-privacy) · [Development](#development)
@@ -91,7 +92,10 @@ Then use **Calculator** for any blueprint and **What to build** for ideas.
 
 A detailed walkthrough — adding characters, choosing your buy/sell/build locations, setting up
 stations with rigs, market structures, freight, roles and stock — is in the
-**[step-by-step setup guide](docs/SETUP.md)**.
+**[step-by-step setup guide](docs/SETUP.md)**. The same steps as a 16-minute video with subtitles:
+**[in English](https://github.com/ogamekuz/Forge/releases/download/v3.1.0/Forge3_setup_EN.mp4)** ·
+[in Russian](https://github.com/ogamekuz/Forge/releases/download/v3.1.0/Forge3_setup_RU.mp4)
+(`.srt` subtitle files are on the [release page](https://github.com/ogamekuz/Forge/releases/tag/v3.1.0)).
 
 ## How Forge calculates
 

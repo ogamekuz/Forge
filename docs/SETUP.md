@@ -10,6 +10,10 @@ program with the **ENG** language selected. Every tab and option is described in
 
 The first setup takes 20–40 minutes, most of which is the program downloading data by itself.
 
+Prefer watching? The same steps are in a 16-minute video with subtitles:
+**[in English](https://github.com/ogamekuz/Forge/releases/download/v3.1.0/Forge3_setup_EN.mp4)** ·
+[in Russian](https://github.com/ogamekuz/Forge/releases/download/v3.1.0/Forge3_setup_RU.mp4).
+
 **Contents**
 
 1. [What you need](#1-what-you-need)

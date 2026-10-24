@@ -55,6 +55,12 @@ _MAPPINGS: list[tuple[str, list[str], str]] = [
         "FROM invTypes t LEFT JOIN invGroups g ON g.groupID = t.groupID",
     ),
     (
+        "sde_market_groups",
+        ["market_group_id"],
+        "SELECT marketGroupID AS market_group_id, parentGroupID AS parent_group_id, "
+        "       marketGroupName AS name, hasTypes AS has_types FROM invMarketGroups",
+    ),
+    (
         "sde_systems",
         ["system_id"],
         "SELECT solarSystemID AS system_id, solarSystemName AS name, "

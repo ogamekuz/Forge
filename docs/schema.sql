@@ -43,6 +43,18 @@ CREATE TABLE sde_types (
 CREATE INDEX idx_types_group    ON sde_types(group_id);
 CREATE INDEX idx_types_category ON sde_types(category_id);
 
+-- Дерево рынка EVE (invMarketGroups): sde_types.market_group_id указывает на лист. Нужно для
+-- разбивки «Что строить» «как на маркете» (Ships › Frigates › Standard / Faction / Advanced,
+-- Ammunition › Hybrid Charges, Rigs, Reaction Materials…) — с галками по разделам.
+-- v7, 2026-10-24: добавлена с согласия владельца.
+CREATE TABLE sde_market_groups (
+    market_group_id  INTEGER PRIMARY KEY,
+    parent_group_id  INTEGER,                 -- NULL — корневой раздел
+    name             TEXT,
+    has_types        BOOLEAN
+);
+CREATE INDEX idx_market_groups_parent ON sde_market_groups(parent_group_id);
+
 -- Солнечные системы — нужны для system cost index и логистики.
 CREATE TABLE sde_systems (
     system_id  INTEGER PRIMARY KEY,

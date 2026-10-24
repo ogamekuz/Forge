@@ -517,3 +517,69 @@ def test_recommend_from_stock_own_blueprints_or_everything(win, qapp, tmp_path):
     cells = {page.s_table.item(r, 0).text(): page.s_table.item(r, 1).text()
              for r in range(page.s_table.rowCount())}
     assert cells == {"Widget": "свой", "Gadget": "нет"}
+
+
+def test_recommend_market_tree_ticks_filter_and_split(win, qapp, tmp_path):
+    """«Что строю»: дерево разделов рынка с галками; снятый раздел пишется в forge.toml, быстрый ТОП
+    сам пересчитывается без него; «Разбивка» даёт свой ТОП на каждый раздел."""
+    from PySide6.QtCore import Qt
+
+    from forge.desktop.widgets import Card, DataTable
+
+    conn = storage.connect(str(tmp_path / "forge.db"))
+    conn.executescript(
+        """
+        INSERT INTO sde_market_groups(market_group_id,parent_group_id,name,has_types) VALUES
+            (4,NULL,'Ships',0),(1361,4,'Frigates',1),(1367,4,'Cruisers',1);
+        UPDATE sde_types SET market_group_id = 1361 WHERE type_id = 2000;
+        INSERT INTO sde_types(type_id,name,volume,market_group_id) VALUES (2001,'Gadget',5.0,1367);
+        INSERT INTO sde_blueprint_products(blueprint_type_id,activity_id,product_type_id,quantity,probability)
+            VALUES (1001,1,2001,1,1.0);
+        INSERT INTO sde_blueprint_activities(blueprint_type_id,activity_id,time_seconds) VALUES (1001,1,600);
+        INSERT INTO sde_blueprint_materials(blueprint_type_id,activity_id,material_type_id,quantity)
+            VALUES (1001,1,34,10);
+        INSERT INTO character_blueprints(item_id,character_id,type_id,location_id,me,te,quantity,runs,is_copy)
+            VALUES (2,7,1001,1030000000003,0,0,-1,-1,0);
+        INSERT INTO market_snapshot(type_id,region_id,sell_min,buy_max,sell_volume)
+            VALUES (2001,10000009,900.0,800.0,50);
+        """
+    )
+    conn.commit()
+    conn.close()
+    win.go("recommend")
+    page = win.pages["recommend"]
+    tree = page.sections.tree
+    assert wait_until(qapp, lambda: tree.topLevelItemCount() == 1, 10)
+    ships = tree.topLevelItem(0)
+    assert ships.text(0) == "Ships" and ships.text(1) == "2 / 2"
+    kids = {ships.child(i).text(0): ships.child(i) for i in range(ships.childCount())}
+    assert list(kids) == ["Cruisers", "Frigates"]
+    assert all(it.checkState(0) == Qt.CheckState.Checked for it in (ships, *kids.values()))
+
+    def top_names() -> set[str]:
+        page._run_top()
+        assert wait_until(qapp, lambda: page.t_go.isEnabled() and "top" not in page._running, 20)
+        return {r["name"] for r in page.t_results.itemAt(0).widget().findChild(DataTable).rows()}
+
+    assert top_names() == {"Widget", "Gadget"}
+    rows = page.t_results.itemAt(0).widget().findChild(DataTable).rows()
+    assert {r["section"] for r in rows} == {"Frigates", "Cruisers"}
+
+    kids["Frigates"].setCheckState(0, Qt.CheckState.Unchecked)      # «не строю фрегаты»
+    assert ships.checkState(0) == Qt.CheckState.PartiallyChecked
+    cfg_path = tmp_path / "forge.toml"
+    assert wait_until(qapp, lambda: config_mod.load(cfg_path).recommend.exclude_market_group_ids == [1361], 10)
+    # быстрый ТОП пересчитался сам — фрегатов в нём больше нет
+    assert wait_until(qapp, lambda: page.t_go.isEnabled() and not page._running and page.t_results.count()
+                      and {r["name"] for r in page.t_results.itemAt(0).widget().findChild(DataTable).rows()}
+                      == {"Gadget"}, 20)
+
+    ships.setCheckState(0, Qt.CheckState.Checked)                    # раздел целиком — снова все
+    assert kids["Frigates"].checkState(0) == Qt.CheckState.Checked
+    assert wait_until(qapp, lambda: config_mod.load(cfg_path).recommend.exclude_market_group_ids == [], 10)
+    page.t_split.setCurrentIndex(page.t_split.findData(2))           # по подразделам
+    assert wait_until(qapp, lambda: config_mod.load(cfg_path).ui.recommend_split == 2, 10)
+    assert wait_until(qapp, lambda: not page._running and page.t_results.count() >= 4, 20)
+    titles = [page.t_results.itemAt(i).widget().title.text() for i in range(page.t_results.count())
+              if isinstance(page.t_results.itemAt(i).widget(), Card)]
+    assert titles[:3] == ["Общий ТОП", "Ships › Cruisers", "Ships › Frigates"]

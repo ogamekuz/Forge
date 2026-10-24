@@ -104,6 +104,10 @@ def sde_stations(conn: sqlite3.Connection) -> Repository:
     return Repository(conn, "sde_stations", ["station_id"])
 
 
+def sde_market_groups(conn: sqlite3.Connection) -> Repository:
+    return Repository(conn, "sde_market_groups", ["market_group_id"])
+
+
 def sde_reprocessing_materials(conn: sqlite3.Connection) -> Repository:
     return Repository(conn, "sde_reprocessing_materials", ["type_id", "material_type_id"])
 

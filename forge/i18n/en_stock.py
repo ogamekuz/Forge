@@ -180,18 +180,71 @@ EN: dict[str, str] = {
     "Лимит кандидатов": "Candidate limit",
     # --- ТОП
     "Показать": "Show",
-    "Группы ТОП, веса и «запреты» — «Настройки → Рекомендации». Двойной клик по строке или «+ в "
-    "корзину» — добавить в корзину.":
-        "Top groups, weights and “exclusions” — “Settings → Recommendations”. Double-click a row or "
-        "“+ to basket” to add it to the basket.",
+    "Что строить — галки «Что строю» слева. Группы ТОП, веса и «запреты» — «Настройки → "
+    "Рекомендации». Двойной клик по строке или «+ в корзину» — добавить в корзину.":
+        "What to build — the “I build” ticks on the left. Top groups, weights and “exclusions” — "
+        "“Settings → Recommendations”. Double-click a row or “+ to basket” to add it to the basket.",
+    "Разбивка": "Breakdown",
+    "только общий ТОП": "overall top only",
+    "по разделам — Ships, Drones…": "by section — Ships, Drones…",
+    "по подразделам — Frigates, Hybrid Charges…": "by subsection — Frigates, Hybrid Charges…",
+    "по группам — Standard / Advanced Frigates, Rigs…": "by group — Standard / Advanced Frigates, Rigs…",
+    "Кроме общего ТОП — свой ТОП на каждый раздел рынка выбранного уровня (как на маркете: Ships › "
+    "Frigates › Standard Frigates). Берутся только разделы, отмеченные в «Что строю»; размер — «ТОП на "
+    "группу» из настроек.":
+        "Besides the overall top — a separate top for every market section of the chosen level (as in "
+        "the in-game market: Ships › Frigates › Standard Frigates). Only sections ticked in “I build” "
+        "are used; the size is “Top per group” from the settings.",
+    "ТОП по разделам рынка": "Top by market section",
+    "Ни в одном отмеченном разделе нет подходящих позиций.": "No matching items in any ticked section.",
+    "Группы ТОП из настроек": "Top groups from the settings",
+    "Раздел": "Section",
+    "Разделы «Что строю» изменились — результат ниже устарел, пересчитай.":
+        "The “I build” sections changed — the result below is outdated, recalculate.",
     "Считаю кандидатов (себестоимость каждого — полный расчёт)…":
         "Calculating candidates (full build cost for each)…",
     "Общий ТОП": "Overall top",
     "ТОП · {name}": "Top · {name}",
-    "Нет кандидатов в этой группе (проверь свои чертежи / состав группы).":
-        "No candidates in this group (check your blueprints / the group's contents).",
-    "Нет подходящих позиций (проверь данные рынка/чертежей и фильтры).":
-        "No matching items (check market/blueprint data and filters).",
+    "Нет кандидатов в этой группе (проверь свои чертежи / состав группы / «Что строю»).":
+        "No candidates in this group (check your blueprints / the group's contents / “I build”).",
+    "Нет подходящих позиций (проверь данные рынка/чертежей, фильтры и «Что строю»).":
+        "No matching items (check market/blueprint data, filters and “I build”).",
+
+    # ========================================== «Что строю» — дерево разделов рынка (pages/market_tree.py)
+    "Что строю": "I build",
+    "только свои": "own only",
+    "Показывать только разделы, где есть свои чертежи (в «Где искать чертежи»). Галки скрытых "
+    "разделов не теряются.":
+        "Show only sections where you have your own blueprints (in “Where to look for blueprints”). "
+        "Ticks of hidden sections are kept.",
+    "Галка — раздел участвует в «Что строить» (ТОП, «Дешевле купить», «Из остатков»). Снял — его "
+    "предметы не предлагаются. Галка раздела ставит/снимает всё внутри.":
+        "Ticked — the section takes part in “What to build” (Top, “Cheaper to buy”, “From stock "
+        "leftovers”). Unticked — its items are not suggested. A section's tick sets/clears everything "
+        "inside it.",
+    "Найти раздел: Frigates, Rigs, Reaction…": "Find a section: Frigates, Rigs, Reaction…",
+    "Все": "All",
+    "Отметить все разделы": "Tick all sections",
+    "Ничего": "None",
+    "Снять все — и отметить только то, что хочешь строить":
+        "Untick everything — then tick only what you want to build",
+    "РАЗДЕЛ МАРКЕТА": "MARKET SECTION",
+    "СВОИХ / ВСЕГО": "OWN / TOTAL",
+    "По своим чертежам: {own} · всего производимых: {total}":
+        "From your own blueprints: {own} · buildable in total: {total}",
+    "Дерева разделов рынка ещё нет в базе — обнови SDE: «Обзор → Скачать SDE» (один раз). До этого "
+    "фильтр по разделам не работает.":
+        "The market section tree is not in the database yet — update the SDE: “Overview → Download "
+        "SDE” (once). Until then the section filter does not work.",
+    "Отмечено всё — предлагается любой производимый предмет.":
+        "Everything is ticked — any buildable item can be suggested.",
+    "Ничего не отмечено — предлагать нечего. Отметь разделы, которые хочешь строить.":
+        "Nothing is ticked — there is nothing to suggest. Tick the sections you want to build.",
+    "Снято: {n} {what} — их предметы не предлагаются.": "Unticked: {n} {what} — their items are not suggested.",
+    "раздел": "section",
+    "раздела": "sections",
+    "разделов": "sections",
+    "Без раздела маркета": "No market section",
     # --- дешевле купить
     "Дешевле купить, чем строить": "Cheaper to buy than build",
     "Предметы, которые рынок продаёт дешевле твоей себестоимости постройки (landed до места "

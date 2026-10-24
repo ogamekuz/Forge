@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from .. import core
@@ -36,9 +36,31 @@ def _in(ids) -> str:
     return ",".join("?" for _ in ids)
 
 
+def market_group_condition(ids) -> tuple[str, list[int]]:
+    """Условие над колонками ``sde_types``: предмет лежит в одном из разделов рынка ``ids``
+    ВМЕСТЕ с подразделами (рекурсивно по ``sde_market_groups``); ``0`` — предметы без раздела
+    маркета (или с разделом, которого нет в дереве). Пустой ``ids`` — ``("", [])``."""
+    ids = sorted({int(x) for x in ids})
+    real = [i for i in ids if i > 0]
+    conds: list[str] = []
+    if real:
+        conds.append(
+            "market_group_id IN (WITH RECURSIVE sub(id) AS ("
+            f"VALUES {','.join('(?)' for _ in real)} "
+            "UNION SELECT m.market_group_id FROM sde_market_groups m JOIN sub ON m.parent_group_id = sub.id"
+            ") SELECT id FROM sub)"
+        )
+    if 0 in ids:
+        # Пустое дерево (SDE ещё не перезалит) не должно превращать «без раздела» во «всё».
+        conds.append("(market_group_id IS NULL OR (EXISTS (SELECT 1 FROM sde_market_groups) "
+                     "AND market_group_id NOT IN (SELECT market_group_id FROM sde_market_groups)))")
+    return (f"({' OR '.join(conds)})" if conds else ""), real
+
+
 def exclusion_clause(cfg: Config | None, column: str = "p.product_type_id") -> tuple[str, list[int]]:
-    """``AND …`` для «запретов» рекомендаций ([recommend] exclude_type/group/category_ids):
-    эти продукты не предлагаются нигде — ни в ТОП, ни в «из остатков», ни в «дешевле купить»."""
+    """``AND …`` для «запретов» рекомендаций ([recommend] exclude_type/group/category_ids) и
+    снятых галок «Что строю» (exclude_market_group_ids — разделы рынка с подразделами): эти
+    продукты не предлагаются нигде — ни в ТОП, ни в «из остатков», ни в «дешевле купить»."""
     if cfg is None:
         return "", []
     rc = cfg.recommend
@@ -46,6 +68,10 @@ def exclusion_clause(cfg: Config | None, column: str = "p.product_type_id") -> t
     groups = [int(x) for x in rc.exclude_group_ids]
     cats = [int(x) for x in rc.exclude_category_ids]
     sql, params = "", []
+    mg_sql, mg_params = market_group_condition(rc.exclude_market_group_ids)
+    if mg_sql:
+        sql += f" AND {column} NOT IN (SELECT type_id FROM sde_types WHERE {mg_sql})"
+        params += mg_params
     if types:
         sql += f" AND {column} NOT IN ({_in(types)})"
         params += types
@@ -354,6 +380,41 @@ def recommend(
     group_ids: list[int] | None = None,
 ) -> list[Recommendation]:
     """Отранжировать кандидатов. Возвращает top рекомендаций по убыванию score."""
+    recs = evaluate(conn, cfg, owned=owned, runs=runs, budget=budget, min_volume=min_volume,
+                    limit_candidates=limit_candidates, group_ids=group_ids)
+    return rank(recs, cfg, top)
+
+
+def rank(recs: list[Recommendation], cfg: Config, top: int | None = None) -> list[Recommendation]:
+    """Score (взвешенная сумма нормированных ROI / ISK-час / ликвидности — нормировка внутри
+    ``recs``) и сортировка по убыванию; ``top`` — обрезка (None — все). Входные объекты не
+    меняются: один набор оценок ранжируется и общим ТОП, и по разделам — у каждого своя шкала."""
+    if not recs:
+        return []
+    rc = cfg.recommend
+    out = [replace(r) for r in recs]
+    n_roi = _normalize(_winsorize([r.roi for r in out], rc.winsor_pct))
+    n_isk = _normalize(_winsorize([r.isk_per_hour for r in out], rc.winsor_pct))
+    n_liq = _normalize(_winsorize([r.daily_volume for r in out], rc.winsor_pct))
+    for r, a, b, c in zip(out, n_roi, n_isk, n_liq, strict=True):
+        r.score = rc.w_roi * a + rc.w_isk_hour * b + rc.w_liquidity * c
+    out.sort(key=lambda x: x.score, reverse=True)
+    return out[:top] if top else out
+
+
+def evaluate(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    *,
+    owned: bool = True,
+    runs: int | None = None,
+    budget: float | None = None,
+    min_volume: float | None = None,
+    limit_candidates: int | None = None,
+    group_ids: list[int] | None = None,
+) -> list[Recommendation]:
+    """Посчитать метрики всех кандидатов, прошедших фильтры (бюджет, мин. объём, битые
+    чертежи), — без score и сортировки (это ``rank``)."""
     rc = cfg.recommend
     runs = runs if runs is not None else rc.runs
     budget = budget if budget is not None else (rc.max_capital or None)
@@ -411,15 +472,4 @@ def recommend(
                 daily_volume=vol,
             )
         )
-
-    if not recs:
-        return []
-
-    n_roi = _normalize(_winsorize([r.roi for r in recs], rc.winsor_pct))
-    n_isk = _normalize(_winsorize([r.isk_per_hour for r in recs], rc.winsor_pct))
-    n_liq = _normalize(_winsorize([r.daily_volume for r in recs], rc.winsor_pct))
-    for r, a, b, c in zip(recs, n_roi, n_isk, n_liq, strict=True):
-        r.score = rc.w_roi * a + rc.w_isk_hour * b + rc.w_liquidity * c
-
-    recs.sort(key=lambda x: x.score, reverse=True)
-    return recs[:top]
+    return recs

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge"
-version = "3.1.0"
+version = "3.2.0"
 description = "Local industry assistant for EVE Online: exact materials, real build cost, schedule, what to build"
 readme = "README.md"
 license = "MIT"

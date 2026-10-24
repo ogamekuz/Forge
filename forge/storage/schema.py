@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 # Версия схемы — поднимать при изменениях DDL.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # ---------------------------------------------------------------------------
 # Доменная схема (соответствует docs/schema.sql) + операционные таблицы Forge.
@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS sde_types (
 );
 CREATE INDEX IF NOT EXISTS idx_types_group    ON sde_types(group_id);
 CREATE INDEX IF NOT EXISTS idx_types_category ON sde_types(category_id);
+
+-- Дерево рынка EVE (invMarketGroups) — разбивка «Что строить» по разделам маркета (схема v7,
+-- см. docs/schema.sql). sde_types.market_group_id указывает на лист.
+CREATE TABLE IF NOT EXISTS sde_market_groups (
+    market_group_id  INTEGER PRIMARY KEY,
+    parent_group_id  INTEGER,
+    name             TEXT,
+    has_types        INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_market_groups_parent ON sde_market_groups(parent_group_id);
 
 CREATE TABLE IF NOT EXISTS sde_systems (
     system_id  INTEGER PRIMARY KEY,

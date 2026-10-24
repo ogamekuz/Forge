@@ -868,7 +868,76 @@ class ForgeService:
             raise ServiceError(404, tr("Отчёт не найден"))
         return {"ok": True, "deleted": deleted}
 
+    # ---------------------------------------------------------- разделы рынка
+    @staticmethod
+    def _section_tree(conn: sqlite3.Connection, cfg: config_mod.Config) -> recommend_mod.SectionTree:
+        """Дерево разделов рынка; «свои» — продукты чертежей в «Где искать чертежи» (как у ТОП)."""
+        own = recommend_mod.engine.candidate_products(
+            conn, owned=True, location_ids=core.locations.expand_with_containers(conn, cfg.blueprint_location_ids))
+        return recommend_mod.SectionTree.load(conn, own)
+
+    @staticmethod
+    def _with_sections(rows: list[dict], tree: recommend_mod.SectionTree, mg: dict[int, int | None]) -> list[dict]:
+        """Колонка «Раздел»: ``section`` — коротко («Frigates › Standard Frigates»),
+        ``section_path`` — полный путь на маркете."""
+        for row in rows:
+            row["section"], row["section_path"] = tree.label(mg.get(int(row["product_type_id"])))
+        return rows
+
+    def _sectioned(self, conn: sqlite3.Connection, cfg: config_mod.Config, rows: list[dict]) -> list[dict]:
+        tree = self._section_tree(conn, cfg)
+        mg = recommend_mod.sections.market_groups_of(conn, [r["product_type_id"] for r in rows])
+        return self._with_sections(rows, tree, mg)
+
+    def market_tree(self) -> dict:
+        """Дерево «Что строю» для вкладки «Что строить»: разделы рынка, где есть производимое, со
+        счётчиками свои/всего; ``excluded`` — снятые галки ([recommend] exclude_market_group_ids);
+        ``ready`` — дерево рынка в БД есть (иначе нужно обновить SDE)."""
+        cfg, conn = self.ctx()
+        try:
+            tree = self._section_tree(conn, cfg)
+        finally:
+            conn.close()
+
+        def node(s: recommend_mod.sections.Section) -> dict:
+            return {"id": s.id, "chain": list(s.chain), "name": s.name, "own": s.own, "total": s.total,
+                    "children": [node(c) for c in s.children]}
+
+        return {"ready": tree.ready, "roots": [node(r) for r in tree.roots],
+                "excluded": sorted({int(x) for x in cfg.recommend.exclude_market_group_ids})}
+
     # ---------------------------------------------------------- рекомендации
+    def recommend_top(self, owned: bool = True, top: int = 30, runs: int | None = None,
+                      budget: float | None = None, min_volume: float | None = None,
+                      limit: int | None = None, split: int = 0) -> dict:
+        """Общий ТОП и (``split`` > 0) свой ТОП на каждый раздел рынка уровня ``split`` (1 — Ships,
+        2 — Frigates, 3 — Standard / Advanced Frigates). Кандидаты оцениваются один раз; у каждого
+        раздела своя шкала score; разделы — в порядке дерева рынка, размер — [recommend]
+        top_per_group. Снятые галки «Что строю» и «запреты» отсекаются ещё до расчёта."""
+        cfg, conn = self.ctx()
+        try:
+            recs = recommend_mod.evaluate(conn, cfg, owned=owned, runs=runs, budget=budget,
+                                          min_volume=min_volume, limit_candidates=limit)
+            tree = self._section_tree(conn, cfg)
+            mg = recommend_mod.sections.market_groups_of(conn, [r.product_type_id for r in recs])
+        finally:
+            conn.close()
+
+        def rows(rs: list[recommend_mod.Recommendation]) -> list[dict]:
+            return self._with_sections([serializers.recommendation_to_dict(r) for r in rs], tree, mg)
+
+        sections: list[dict] = []
+        if split > 0:
+            buckets: dict[int, tuple[list, list[recommend_mod.Recommendation]]] = {}
+            for r in recs:
+                path = tree.at_level(mg.get(r.product_type_id), split)
+                if path:
+                    buckets.setdefault(path[-1].id, (path, []))[1].append(r)
+            for path, items in sorted(buckets.values(), key=lambda b: b[0][-1].order):
+                sections.append({"id": path[-1].id, "name": " › ".join(s.name for s in path),
+                                 "items": rows(recommend_mod.rank(items, cfg, cfg.recommend.top_per_group))})
+        return {"flat": rows(recommend_mod.rank(recs, cfg, top)), "sections": sections}
+
     def recommend(self, owned: bool = True, top: int = 30, runs: int | None = None,
                   budget: float | None = None, min_volume: float | None = None,
                   limit: int | None = None) -> list[dict]:
@@ -912,9 +981,9 @@ class ForgeService:
                 conn, cfg, owned=owned, top=top, min_volume=min_volume, limit_candidates=limit,
                 group_ids=group_ids or None,
             )
+            return self._sectioned(conn, cfg, [serializers.buy_deal_to_dict(d) for d in deals])
         finally:
             conn.close()
-        return [serializers.buy_deal_to_dict(d) for d in deals]
 
     def recommend_stock(self, top: int = 30, min_volume: float | None = None,
                         limit: int | None = None, groups: Iterable[int] | None = None,
@@ -931,9 +1000,9 @@ class ForgeService:
                 conn, cfg, top=top, min_volume=min_volume,
                 limit_candidates=limit, group_ids=group_ids or None, reserved=reserved, owned=owned,
             )
+            return self._sectioned(conn, cfg, [serializers.stock_recommendation_to_dict(r) for r in recs])
         finally:
             conn.close()
-        return [serializers.stock_recommendation_to_dict(r) for r in recs]
 
     def liquidity_info(self) -> dict:
         """Откуда берётся «Объём/сут» ([recommend] liquidity_source) — подсказка на вкладке «Что

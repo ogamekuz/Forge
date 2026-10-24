@@ -100,6 +100,10 @@ class Recommend(BaseModel):
     exclude_type_ids: list[int] = Field(default_factory=list)
     exclude_group_ids: list[int] = Field(default_factory=list)
     exclude_category_ids: list[int] = Field(default_factory=list)
+    # «Что строю» — галки дерева рынка слева на вкладке «Что строить»: снятые разделы маркета
+    # (sde_market_groups, со всеми подразделами; 0 — предметы без раздела маркета) не
+    # предлагаются нигде, как и «запреты». Пусто = всё отмечено.
+    exclude_market_group_ids: list[int] = Field(default_factory=list)
     # Скан «дешевле купить, чем строить»:
     buy_cheaper_max_savings_pct: float = 0.9  # отсечь артефакты SDE (экономия выше — мусор, напр. компрессия)
     buy_cheaper_exclude_categories: list[int] = Field(default_factory=lambda: [25])  # 25 = Asteroid (руда/лёд)
@@ -356,6 +360,11 @@ class Ui(BaseModel):
     buy_cheaper_top: int = 60
     buy_cheaper_min_volume: float = 50.0
     stock_top: int = 30
+    # ТОП «что строить»: кроме общего — свой ТОП на каждый раздел маркета этого уровня
+    # (0 — без разбивки, 1 — Ships, 2 — Frigates, 3 — Standard Frigates / Advanced Frigates).
+    recommend_split: int = 0
+    # Дерево разделов «Что строю»: показывать только разделы, где есть свои чертежи.
+    recommend_tree_own_only: bool = True
     # Язык пульта и HTML-отчётов: "ru" (по умолчанию) или "en" — переключатель RUS/ENG в шапке.
     lang: str = "ru"
     # Тема оформления пульта (окно «Тема» в шапке): forge (по умолчанию), graphite, studio, fjord,

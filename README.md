@@ -19,7 +19,7 @@ used only to sync data from the official EVE servers. Interface in English and R
 
 ![Schedule: Gantt chart of jobs across character slots](docs/images/schedule_en.png)
 
-![What to build: top items by ROI, ISK/hour and daily volume](docs/images/what_to_build_en.png)
+![What to build: the market-section tree with ticks on the left, a top for every section on the right](docs/images/what_to_build_en.png)
 
 </details>
 
@@ -37,7 +37,7 @@ bonuses.</sub>
 
 ### Portable build (Windows 10/11, recommended)
 
-1. Download **`Forge_3.1.zip`** from the [Releases](../../releases) page — Python is included,
+1. Download **`Forge_3.2.zip`** from the [Releases](../../releases) page — Python is included,
    nothing to install, no admin rights needed.
 2. Unzip the **whole** folder anywhere (Desktop, Documents…).
 3. Double-click **`Forge.cmd`** — the Forge window opens.
@@ -146,12 +146,24 @@ stations with rigs, market structures, freight, roles and stock — is in the
 
 ### What to build
 
+On the left — **I build**: the EVE market tree with ticks, only the sections with something
+buildable — *Ships › Frigates › Standard / Faction / Advanced Frigates*, *Ammunition & Charges ›
+Hybrid Charges › Standard / Advanced*, *Rigs*, *Materials › Reaction Materials*… A section's tick sets
+or clears everything inside it; unticked sections are not suggested in any of the three modes. Next to
+each section — *own / total*: how many items you can build from your own blueprints and how many are
+buildable at all; *own only* hides sections without your blueprints, plus search and *All / None*.
+The ticks are saved at once (`[recommend] exclude_market_group_ids`), and a quick result on the open
+mode is recalculated by itself. The tree comes from the SDE (*Overview → Download SDE*).
+
 Three modes (buttons at the top):
 
 - **Top "what to build"** — items ranked by ROI, ISK/hour and liquidity (columns: *ROI, ISK/hour,
-  Volume/day, Investment, Score*), plus a separate top for every group from *Settings →
+  Volume/day, Investment, Score, Section*), plus a separate top for every group from *Settings →
   Recommendations*. Filters: *Own blueprints only* (candidates from your characters' blueprints or
   everything buildable), *Top*, *Runs*, *Budget, ISK*, *Min. volume/day*, *Candidate limit*.
+  **Breakdown** — besides the overall top, a top of its own for every ticked market section of the
+  chosen level: *by section* (Ships, Drones…), *by subsection* (Frigates, Hybrid Charges…) or *by
+  group* (Standard / Faction / Advanced Frigates, Armor Rigs, Reaction Materials…).
   Double-click a row or **+ to basket** to add it to the basket.
 - **Cheaper to buy** — items the market sells for less than your build cost landed at the build
   location (*Build, Buy, Hub, Savings*). Without groups it scans the whole traded market (~10 s);

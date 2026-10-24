@@ -145,3 +145,31 @@ def test_load_dogma_attributes_filters_to_known_bonus_ids(conn, tmp_path):
     assert [r[0] for r in rows] == [2594]
     rows = conn.execute("SELECT type_id, attribute_id, value_float FROM sde_dogma_type_attributes").fetchall()
     assert [tuple(r) for r in rows] == [(46486, 2594, -2.0)]
+
+
+def test_load_market_groups_tree(conn, tmp_path):
+    """invMarketGroups → sde_market_groups: дерево рынка для разбивки «Что строить»."""
+    dump = tmp_path / "fuzz_mg.sqlite"
+    _make_fuzzwork_dump(dump)
+    db = sqlite3.connect(str(dump))
+    db.executescript(
+        """
+        CREATE TABLE invMarketGroups (marketGroupID INT, parentGroupID INT, marketGroupName TEXT,
+                                      description TEXT, iconID INT, hasTypes INT);
+        INSERT INTO invMarketGroups VALUES
+            (4, NULL, 'Ships', '', 0, 0),
+            (1361, 4, 'Frigates', '', 0, 0),
+            (5, 1361, 'Standard Frigates', '', 0, 0),
+            (61, 5, 'Minmatar', '', 0, 1);
+        """
+    )
+    db.commit()
+    db.close()
+
+    counts = sde.load_from_sqlite(conn, dump)
+    conn.commit()
+
+    assert counts["sde_market_groups"] == 4
+    leaf = repo.sde_market_groups(conn).get(market_group_id=61)
+    assert leaf["parent_group_id"] == 5 and leaf["name"] == "Minmatar" and leaf["has_types"] == 1
+    assert repo.sde_market_groups(conn).get(market_group_id=4)["parent_group_id"] is None

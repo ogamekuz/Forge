@@ -1,11 +1,22 @@
-"""Вкладка «Что строить»: ТОП по ROI/ISK-час/ликвидности (общий и по группам), «Дешевле купить,
-чем строить», «Что построить из остатков склада». Всё — с фильтрами; «запреты» (исключённые
-предметы/группы/категории) задаются в «Настройки → Рекомендации»."""
+"""Вкладка «Что строить»: ТОП по ROI/ISK-час/ликвидности (общий, по разделам рынка и по группам
+из настроек), «Дешевле купить, чем строить», «Что построить из остатков склада». Слева — дерево
+«Что строю» (разделы рынка с галками, ``market_tree.MarketTreePanel``): снятые разделы не
+предлагаются ни в одном из трёх расчётов. «Запреты» (исключённые предметы/группы/категории) —
+в «Настройки → Рекомендации»."""
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..widgets import (
     N_,
@@ -28,8 +39,23 @@ from ..widgets import (
     label,
     run_bg,
     scroll_page,
+    section,
     tr,
 )
+from .market_tree import MarketTreePanel
+
+# «Разбивка» ТОП по разделам рынка: уровень дерева → подпись (пример — в подсказке).
+_SPLITS = ((0, N_("только общий ТОП")), (1, N_("по разделам — Ships, Drones…")),
+           (2, N_("по подразделам — Frigates, Hybrid Charges…")),
+           (3, N_("по группам — Standard / Advanced Frigates, Rigs…")))
+# Автопересчёт после смены галок «Что строю» — только если прошлый расчёт был быстрым, сек.
+_AUTO_RERUN_MAX_S = 15.0
+
+
+def _section_col() -> Col:
+    # Фиксированная ширина (тянется мышью): длинный путь не отъедает место у названия предмета —
+    # обрезается «…», целиком — в подсказке.
+    return Col("section", tr("Раздел"), width=180, tip=lambda _v, r: r.get("section_path") or "")
 
 
 def _field(title: str, widget) -> QWidget:
@@ -106,9 +132,25 @@ class RecommendPage(Page):
         self.basket_note = label("", "faint")
         top.addWidget(self.basket_note)
         v.addLayout(top)
+        self.sections = MarketTreePanel(ctx)
+        self.sections.setMinimumWidth(300)
+        self.sections.changed.connect(self._sections_changed)
         self.stack = QStackedWidget()
-        v.addWidget(self.stack, 1)
+        split = QSplitter(Qt.Orientation.Horizontal)
+        split.setChildrenCollapsible(False)
+        split.setHandleWidth(12)
+        split.addWidget(self.sections)
+        split.addWidget(self.stack)
+        split.setStretchFactor(0, 0)
+        split.setStretchFactor(1, 1)
+        split.setSizes([400, 1040])
+        v.addWidget(split, 1)
         self._liq: dict = {}   # откуда «Объём/сут» (svc.liquidity_info) — подсказки колонок
+        # Расчёты вкладок: сколько длился последний (None — ещё не считали), какие идут сейчас и
+        # какие пересчитать сразу после текущего (галки «Что строю» сменились во время расчёта).
+        self._took: dict[str, float | None] = {"top": None, "cheaper": None, "stock": None}
+        self._running: set[str] = set()
+        self._rerun: set[str] = set()
         cfg = self.svc.load_cfg()
         self.stack.addWidget(self._build_top(cfg))
         self.stack.addWidget(self._build_cheaper(cfg))
@@ -120,9 +162,45 @@ class RecommendPage(Page):
 
     def on_show(self):
         self._load_liquidity()
+        self.sections.ensure_loaded()
 
     def _switch(self, key):
         self.stack.setCurrentIndex({"top": 0, "cheaper": 1, "stock": 2}[key])
+
+    # ------------------------------------------------------------ «Что строю»
+    def _runner(self, key):
+        return {"top": self._run_top, "cheaper": self._run_cheaper, "stock": self._run_stock}[key]
+
+    def _sections_changed(self):
+        """Галки разделов сохранены: открытый расчёт, если он был быстрым, — пересчитать сразу;
+        остальные — пометить устаревшими (кнопка расчёта пересчитает)."""
+        current = self.seg.value()
+        for key, took in self._took.items():
+            if took is None:
+                continue
+            if key == current and took <= _AUTO_RERUN_MAX_S:
+                if key in self._running:
+                    self._rerun.add(key)
+                else:
+                    self._runner(key)()
+            else:
+                self._status_of(key).show_msg("info", tr("Разделы «Что строю» изменились — результат ниже "
+                                                         "устарел, пересчитай."))
+
+    def _status_of(self, key) -> StatusLine:
+        return {"top": self.t_err, "cheaper": self.c_err, "stock": self.s_err}[key]
+
+    def _started(self, key) -> float:
+        self._running.add(key)
+        return time.monotonic()
+
+    def _finished(self, key, t0: float, ok: bool):
+        self._running.discard(key)
+        if ok:
+            self._took[key] = time.monotonic() - t0
+        if key in self._rerun:
+            self._rerun.discard(key)
+            self._runner(key)()
 
     # ------------------------------------------------------------ ликвидность
     def _load_liquidity(self):
@@ -157,8 +235,8 @@ class RecommendPage(Page):
             self.ctx.flash(tr("{name} уже в корзине", name=name), ms=3000)
 
     # ------------------------------------------------------------------ ТОП
-    def _reco_cols(self):
-        return [
+    def _reco_cols(self, with_section: bool = True):
+        cols = [
             Col("name", tr("Предмет"), icon_key="product_type_id", stretch=True),
             Col("roi", "ROI", lambda v, _r: fmt_pct(v), "right", tone=_tone_sign),
             Col("isk_per_hour", tr("ISK/час"), lambda v, _r: fmt_isk_short(v), "right"),
@@ -167,6 +245,7 @@ class RecommendPage(Page):
             Col("capital", tr("Вложение"), lambda v, _r: fmt_isk_short(v), "right"),
             Col("score", "Score", lambda v, _r: f"{v:.2f}", "right", tone=lambda _v, _r: "cyan"),
         ]
+        return [*cols, _section_col()] if with_section else cols
 
     def _build_top(self, cfg):
         scroll, body = scroll_page()
@@ -189,8 +268,23 @@ class RecommendPage(Page):
         self.t_go.clicked.connect(self._run_top)
         row.addWidget(self.t_go, 0, Qt.AlignmentFlag.AlignBottom)
         f.body.addLayout(row)
-        f.body.addWidget(label(tr("Группы ТОП, веса и «запреты» — «Настройки → Рекомендации». Двойной клик по "
-                                  "строке или «+ в корзину» — добавить в корзину."), "faint", wrap=True))
+        srow = QHBoxLayout()
+        srow.setSpacing(10)
+        srow.addWidget(label(tr("Разбивка"), "label"))
+        self.t_split = QComboBox()
+        for level, text in _SPLITS:
+            self.t_split.addItem(tr(text), level)
+        self.t_split.setCurrentIndex(max(0, self.t_split.findData(cfg.ui.recommend_split)))
+        self.t_split.setToolTip(tr("Кроме общего ТОП — свой ТОП на каждый раздел рынка выбранного уровня (как на "
+                                   "маркете: Ships › Frigates › Standard Frigates). Берутся только разделы, "
+                                   "отмеченные в «Что строю»; размер — «ТОП на группу» из настроек."))
+        self.t_split.currentIndexChanged.connect(self._split_changed)
+        srow.addWidget(self.t_split)
+        srow.addStretch(1)
+        f.body.addLayout(srow)
+        f.body.addWidget(label(tr("Что строить — галки «Что строю» слева. Группы ТОП, веса и «запреты» — «Настройки "
+                                  "→ Рекомендации». Двойной клик по строке или «+ в корзину» — добавить в "
+                                  "корзину."), "faint", wrap=True))
         self.t_liq = label("", "faint", wrap=True)
         f.body.addWidget(self.t_liq)
         body.addWidget(f)
@@ -204,21 +298,32 @@ class RecommendPage(Page):
         body.addStretch(1)
         return scroll
 
+    def _split_changed(self, _i):
+        level = int(self.t_split.currentData() or 0)
+        run_bg(lambda: self.svc.put_config({"ui": {"recommend_split": level}}))
+        if self._took["top"] is not None and self._took["top"] <= _AUTO_RERUN_MAX_S:
+            if "top" in self._running:
+                self._rerun.add("top")
+            else:
+                self._run_top()
+
     def _run_top(self):
         owned = self.t_owned.isChecked()
         top = self.t_top.int_value(30)
         runs = self.t_runs.int_value(1) or None
         budget, minvol = self.t_budget.value(), self.t_minvol.value()
         limit = self.t_limit.int_value(0) or None
+        split = int(self.t_split.currentData() or 0)
         self.t_busy.start(tr("Считаю кандидатов (себестоимость каждого — полный расчёт)…"))
         self.t_go.setEnabled(False)
         self.t_err.clear_msg()
         svc = self.svc
+        t0 = self._started("top")
 
         def work():
-            flat = svc.recommend(owned, top, runs, budget, minvol, limit)
+            res = svc.recommend_top(owned, top, runs, budget, minvol, limit, split)
             grouped = svc.recommend_grouped(owned, runs, budget, minvol, limit)
-            return flat, grouped
+            return res, grouped
 
         def done(res, err):
             self.t_busy.stop()
@@ -226,22 +331,37 @@ class RecommendPage(Page):
             clear_layout(self.t_results)
             if err:
                 self.t_err.show_msg("err", err_text(err))
+                self._finished("top", t0, False)
                 return
-            flat, grouped = res
-            self.t_results.addWidget(self._table_card(tr("Общий ТОП"), flat))
-            for g in grouped:
-                self.t_results.addWidget(self._table_card(tr("ТОП · {name}", name=g["name"]), g["items"],
-                                                          tr("Нет кандидатов в этой группе (проверь свои чертежи "
-                                                             "/ состав группы).")))
+            res, grouped = res
+            self.t_results.addWidget(self._table_card(tr("Общий ТОП"), res["flat"]))
+            if split:
+                self.t_results.addWidget(section(tr("ТОП по разделам рынка")))
+                if not res["sections"]:
+                    self.t_results.addWidget(label(tr("Ни в одном отмеченном разделе нет подходящих позиций."),
+                                                   "muted", wrap=True))
+                for s in res["sections"]:
+                    # на уровне «группа» колонка «Раздел» повторила бы заголовок карточки
+                    self.t_results.addWidget(self._table_card(s["name"], s["items"], icon="tag", tone="cyan",
+                                                              with_section=split < 3))
+            if grouped:
+                if split:
+                    self.t_results.addWidget(section(tr("Группы ТОП из настроек")))
+                for g in grouped:
+                    self.t_results.addWidget(self._table_card(tr("ТОП · {name}", name=g["name"]), g["items"],
+                                                              tr("Нет кандидатов в этой группе (проверь свои "
+                                                                 "чертежи / состав группы / «Что строю»).")))
+            self._finished("top", t0, True)
         run_bg(work, done)
 
     def _table_card(self, title, rows,
-                    empty=N_("Нет подходящих позиций (проверь данные рынка/чертежей и фильтры).")):
-        card = Card(title, "star", "gold")
+                    empty=N_("Нет подходящих позиций (проверь данные рынка/чертежей, фильтры и «Что строю»)."),
+                    icon="star", tone="gold", with_section=True):
+        card = Card(title, icon, tone)
         if not rows:
             card.body.addWidget(label(tr(empty), "muted", wrap=True))
             return card
-        t = DataTable(self._reco_cols(), action=(tr("В корзину (Калькулятор/Расписание)"), tr("в корзину"),
+        t = DataTable(self._reco_cols(with_section), action=(tr("В корзину (Калькулятор/Расписание)"), tr("в корзину"),
                                                  self._add))
         self._tip_volume_header(t, "daily_volume")
         t.set_rows(rows)
@@ -292,6 +412,7 @@ class RecommendPage(Page):
             Col("savings_pct", tr("Экономия"), lambda v, _r: "−" + fmt_pct(v), "right", tone=lambda _v, _r: "green"),
             Col("daily_volume", tr("Объём/сут"), lambda v, _r: fmt_isk_short(v), "right",
                 tip=lambda _v, _r: self._liq_tip() + " " + (self._liq.get("cheaper_note") or "")),
+            _section_col(),
         ])
         self.c_card.body.addWidget(self.c_table)
         self.c_card.hide()
@@ -314,12 +435,14 @@ class RecommendPage(Page):
         self.c_busy.start(tr("Считаю себестоимость по рынку…"))
         self.c_go.setEnabled(False)
         self.c_err.clear_msg()
+        t0 = self._started("cheaper")
 
         def done(rows, err):
             self.c_busy.stop()
             self.c_go.setEnabled(True)
             if err:
                 self.c_err.show_msg("err", err_text(err))
+                self._finished("cheaper", t0, False)
                 return
             self.c_card.show()
             self.c_card.set_meta(tr("{n} поз.", n=len(rows)))
@@ -327,6 +450,7 @@ class RecommendPage(Page):
             self.c_table.fit_height(40)
             if not rows:
                 self.c_err.show_msg("info", tr("Ничего не нашлось — всё выгоднее строить (или подними «мин. объём»)."))
+            self._finished("cheaper", t0, True)
         run_bg(lambda: self.svc.buy_cheaper(owned, top, minvol, limit, groups), done)
 
     # ------------------------------------------------------------ из остатков
@@ -383,6 +507,7 @@ class RecommendPage(Page):
             Col("stock_value", tr("Со склада"), lambda v, _r: fmt_isk_short(v), "right", tone=lambda _v, _r: "cyan"),
             Col("stock_utilization", tr("% себест."), lambda v, _r: fmt_pct(v), "right"),
             Col("score", "Score", lambda v, _r: f"{v:.2f}", "right"),
+            _section_col(),
         ], action=(tr("В корзину с подобранным числом прогонов"), tr("в корзину"), self._add))
         self.s_table.activated.connect(self._add)
         self.s_card.body.addWidget(self.s_table)
@@ -402,12 +527,14 @@ class RecommendPage(Page):
                           else tr("Сверяю склад со всем, что производится (около минуты)…"))
         self.s_go.setEnabled(False)
         self.s_err.clear_msg()
+        t0 = self._started("stock")
 
         def done(rows, err):
             self.s_busy.stop()
             self.s_go.setEnabled(True)
             if err:
                 self.s_err.show_msg("err", err_text(err))
+                self._finished("stock", t0, False)
                 return
             self.s_card.show()
             self.s_card.set_meta(tr("{n} поз.", n=len(rows)))
@@ -419,4 +546,5 @@ class RecommendPage(Page):
             elif not rows:
                 self.s_err.show_msg("info", tr("Ничего не нашлось — склад пуст (проверь вкладку «Склад») или из "
                                                "того, что на нём лежит, ничего продаваемого не строится."))
+            self._finished("stock", t0, True)
         run_bg(lambda: self.svc.recommend_stock(top, minvol, limit, groups, res_, owned), done)

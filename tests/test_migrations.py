@@ -23,6 +23,7 @@ def test_init_creates_tables_and_version(conn):
         "sde_reprocessing_materials",
         "character_asset_flags",
         "universe_structures",
+        "sde_market_groups",
         "market_history",
         "market_adjusted_prices",
         "system_cost_indices",
@@ -32,7 +33,7 @@ def test_init_creates_tables_and_version(conn):
     ):
         assert expected in tables
     assert current_version(conn) == SCHEMA_VERSION
-    assert SCHEMA_VERSION == 6  # поднято при добавлении universe_structures (Forge 3.0)
+    assert SCHEMA_VERSION == 7  # v6 — universe_structures (Forge 3.0), v7 — sde_market_groups
 
 
 def test_init_is_idempotent():

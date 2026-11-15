@@ -122,9 +122,11 @@ def main() -> int:
     ap.add_argument("app", type=Path)
     ap.add_argument("--out", type=Path, default=Path("dist/macos-check"))
     args = ap.parse_args()
-    args.out.mkdir(parents=True, exist_ok=True)
-    window_shots(args.app, args.out)
-    problems = launch(args.app.resolve(), args.out)
+    out = args.out.resolve()  # снимки пишет процесс, который сам делает chdir — путь абсолютный
+    out.mkdir(parents=True, exist_ok=True)
+    app = args.app.resolve()
+    window_shots(app, out)
+    problems = launch(app, out)
     for p in problems:
         log("ОШИБКА: " + p)
     if not problems:

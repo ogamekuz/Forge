@@ -147,12 +147,22 @@ def prune_qt(site: Path) -> None:
         else:
             d.unlink()
 
+    frameworks = qt / "lib"
+    have = {fw.name.removesuffix(".framework") for fw in frameworks.glob("*.framework")}
+    # Плагин, которому нужен фреймворк не из Essentials (imageformats/libqpdf → QtPdf из
+    # PySide6-Addons), и так не загрузится — выкидываем его, а не тащим лишнее.
+    plugin_libs = []
+    for p in (p for p in plugins.rglob("*") if is_macho(p)):
+        missing = macho_deps(p) - have
+        if missing:
+            log(f"Плагин {p.relative_to(plugins)} без {', '.join(sorted(missing))} — убран")
+            p.unlink()
+        else:
+            plugin_libs.append(p)
     roots = [*pyside.glob("Qt*.abi3.so"), *pyside.glob("libpyside6*.dylib"),
-             *(site / "shiboken6").glob("*.dylib"), *(site / "shiboken6").glob("*.so"),
-             *(p for p in plugins.rglob("*") if is_macho(p))]
+             *(site / "shiboken6").glob("*.dylib"), *(site / "shiboken6").glob("*.so"), *plugin_libs]
     need: set[str] = set()
     todo = set().union(*(macho_deps(p) for p in roots))
-    frameworks = qt / "lib"
     while todo:
         name = todo.pop()
         if name in need:

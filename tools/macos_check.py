@@ -112,7 +112,8 @@ def launch(app: Path, out: Path) -> list[str]:
         shutil.copy2(log_file, out / "forge_desktop.log")
         if "Traceback" in log_file.read_text(encoding="utf-8", errors="replace"):
             problems.append("в forge_desktop.log есть трейс")
-    log("Папка данных: " + ", ".join(sorted(p.name for p in data.iterdir())))
+    if data.is_dir():
+        log("Папка данных: " + ", ".join(sorted(p.name for p in data.iterdir())))
     return problems
 
 

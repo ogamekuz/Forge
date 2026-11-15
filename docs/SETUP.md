@@ -39,7 +39,8 @@ Prefer watching? The same steps are in a 16-minute video with subtitles:
 
 ## 1. What you need
 
-- Windows 10 or 11 and about 1 GB of disk space (game data and your own data).
+- Windows 10 or 11, or a Mac with Apple Silicon (M1 or newer) and macOS 14 or newer; about 1 GB of
+  disk space (game data and your own data).
 - Access to the EVE accounts whose characters you want to add. You log in on the official EVE
   Online page; you never type your password into Forge.
 - Decide in advance (you can change it later):
@@ -69,6 +70,22 @@ You don't need to know structure IDs in advance: Forge shows them after a charac
 
 The portable build already contains an EVE SSO application (Client ID); you don't need to register
 your own.
+
+### macOS (Apple Silicon)
+
+1. Download `Forge_<version>_macOS.zip` from [Releases](https://github.com/ogamekuz/Forge/releases)
+   and open it: you get `Forge.app` with its own Python.
+2. Drag `Forge.app` into Applications and double-click it.
+3. The first time macOS says it could not verify "Forge": click "Done", open System Settings →
+   Privacy & Security and click "Open Anyway" next to the message about Forge (macOS 14:
+   right-click `Forge.app` → Open). The app is not signed with a paid Apple Developer ID, which is
+   all the warning is about.
+4. When Forge first stores a character's access, macOS may ask to use the keychain: click "Always
+   Allow".
+
+Everything else in this guide is the same on a Mac, except where the data lives:
+`~/Library/Application Support/Forge` instead of the program folder
+([section 16](#16-updating-moving-and-backups)).
 
 ### From source
 
@@ -147,7 +164,7 @@ All scopes are read-only: Forge changes nothing in the game and never moves ISK.
 ### Where access is stored
 
 Forge doesn't store your password; it stores an EVE refresh token. Tokens live in the **Windows
-Credential Manager**, not in the database and not in `forge.toml`. If EVE stops accepting a saved
+Credential Manager** (on a Mac, in the **Keychain**), not in the database and not in `forge.toml`. If EVE stops accepting a saved
 login (password change, access revoked on the EVE website, character transfer), the Overview and
 the Characters tab show "login needed". Then use **Add character (EVE SSO)** with that character
 again.
@@ -513,7 +530,8 @@ the interval has passed since the last successful one.
 
 ## 16. Updating, moving and backups
 
-All your data lives in the program folder:
+All your data lives in the program folder (the macOS app keeps it in
+`~/Library/Application Support/Forge`; to update it, just replace `Forge.app`):
 
 | File / folder | What it is |
 |---|---|

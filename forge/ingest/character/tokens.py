@@ -1,7 +1,7 @@
-"""Хранение refresh-токенов EVE SSO в Windows Credential Manager (через keyring).
+"""Хранение refresh-токенов EVE SSO в системном хранилище паролей (через keyring).
 
 Секрет НЕ попадает ни в git, ни в файл БД: keyring пишет в системное хранилище
-(на Windows — Credential Manager поверх DPAPI). Поэтому колонка ``characters.refresh_token``
+(на Windows — Credential Manager поверх DPAPI, на macOS — Связка ключей). Поэтому колонка ``characters.refresh_token``
 хранит не токен, а состояние входа: маркер ``MARKER`` (токен в keyring) или ``MARKER_RELOGIN``
 (EVE SSO его не принял — нужен новый вход), а сам токен берётся отсюда.
 

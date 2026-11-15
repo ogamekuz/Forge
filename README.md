@@ -37,7 +37,7 @@ bonuses.</sub>
 
 ### Portable build (Windows 10/11, recommended)
 
-1. Download **`Forge_3.2.zip`** from the [Releases](../../releases) page — Python is included,
+1. Download **`Forge_3.2.1.zip`** from the [Releases](../../releases) page — Python is included,
    nothing to install, no admin rights needed.
 2. Unzip the **whole** folder anywhere (Desktop, Documents…).
 3. Double-click **`Forge.cmd`** — the Forge window opens.
@@ -49,9 +49,22 @@ The portable build comes with a ready-made EVE SSO application (Client ID) — y
 register your own. All your data stays in that folder (see [Data and privacy](#data-and-privacy));
 to update, unzip the new version and copy `forge.db`, `forge.toml` and `reports/` over.
 
+### macOS (Apple Silicon)
+
+1. Download **`Forge_3.2.1_macOS.zip`** from the [Releases](../../releases) page and open it — you
+   get `Forge.app` with Python inside. Needs a Mac with M1 or newer and macOS 14 Sonoma or newer.
+2. Drag **Forge.app** into *Applications* and double-click it.
+3. The first time macOS says it could not verify "Forge" — click *Done*, then *System Settings →
+   Privacy & Security → Open Anyway* (macOS 14: right-click Forge.app → *Open*). The app is not
+   signed with a paid Apple Developer ID; that is all the warning means.
+4. When the first character's token is stored, macOS may ask for keychain access — *Always Allow*.
+
+The same ready-made EVE SSO application is included. Your data lives in
+`~/Library/Application Support/Forge`; to update, just replace Forge.app.
+
 ### From source
 
-Requires Python 3.12+ (Windows 10/11; other platforms are untested).
+Requires Python 3.12+ (Windows 10/11 or macOS).
 
 ```powershell
 git clone <this repository> Forge
@@ -397,13 +410,14 @@ In the portable build the same commands are available as
 
 ## Data and privacy
 
-- Everything stays in the program folder: `forge.db` (database), `forge.toml` (settings),
-  `sde-latest.sqlite` (SDE dump), `reports/` (build reports), `.forge/` (window state, basket, icon
-  cache), `forge_desktop.log` (errors).
+- Everything stays in the program folder (the macOS app: `~/Library/Application Support/Forge`):
+  `forge.db` (database), `forge.toml` (settings), `sde-latest.sqlite` (SDE dump), `reports/` (build
+  reports), `.forge/` (window state, basket, icon cache), `forge_desktop.log` (errors).
 - Network access goes only to `esi.evetech.net` and `login.eveonline.com` (EVE API and login),
   `images.evetech.net` (icons and logos) and `fuzzwork.co.uk` (SDE dump, market aggregates).
-- EVE SSO uses OAuth2 PKCE: no application secret. Refresh tokens are kept in the Windows Credential
-  Manager (via `keyring`), never in the database or in `forge.toml`. All scopes are read-only.
+- EVE SSO uses OAuth2 PKCE: no application secret. Refresh tokens are kept in the system password
+  store — Windows Credential Manager or the macOS Keychain (via `keyring`), never in the database or
+  in `forge.toml`. All scopes are read-only.
 - The report server listens on `127.0.0.1` only (ports 8000–8010).
 
 ## Development
@@ -421,6 +435,11 @@ strings are Russian keys translated via `forge/i18n/en_*.py`.
 Portable zip: `py -3.12 tools\build_portable.py` — takes the official embeddable Python 3.12 from
 python.org (or a local one via `--python-embed`), installs the dependencies and writes
 `dist/Forge_<version>.zip`.
+
+macOS app: `python3 tools/build_macos.py` on a Mac with Apple Silicon writes
+`dist/Forge_<version>_macOS.zip` (`Forge.app` with a relocatable Python from python-build-standalone).
+GitHub Actions ([`.github/workflows/macos.yml`](.github/workflows/macos.yml)) builds it on every push,
+runs the tests and a launch check on a real Mac, and attaches the zip to the release of a `v*` tag.
 
 ## Support
 

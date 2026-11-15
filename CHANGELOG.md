@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.2.1 — 2026-11-15
+
+- **macOS.** Forge for Macs with Apple Silicon (M1 or newer, macOS 14+): `Forge_3.2.1_macOS.zip`
+  with `Forge.app` and its own Python. Data lives in `~/Library/Application Support/Forge`, character
+  tokens in the macOS Keychain; *Show* buttons open Finder. The app is built, tested and test-launched
+  on a real Mac by GitHub Actions.
+- Without the theme's fonts (on a Mac) the interface uses the system font and the system monospace
+  font.
+
+- **macOS.** Forge для Маков на Apple Silicon (M1 и новее, macOS 14+): `Forge_3.2.1_macOS.zip` с
+  `Forge.app` и своим Python. Данные — в `~/Library/Application Support/Forge`, токены персонажей — в
+  связке ключей macOS; кнопки «Показать» открывают Finder. Приложение собирается, проходит тесты и
+  пробный запуск на настоящем Маке в GitHub Actions.
+- Без шрифтов темы (на Маке) интерфейс берёт системный шрифт и системный моноширинный.
+
 ## 3.2.0 — 2026-10-24
 
 - **What to build: pick what you build like in the EVE market.** On the left — the market tree

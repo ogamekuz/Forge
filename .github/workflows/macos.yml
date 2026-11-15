@@ -1,0 +1,73 @@
+# macOS build of Forge (Apple Silicon): tests, Forge.app in a zip, a launch check on a real Mac.
+# Every push to main and every manual run keeps the zip as a run artifact; a v* tag also attaches
+# it to the GitHub release of that tag (if the release exists and has no macOS zip yet).
+name: macOS build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # only the "Attach to release" step writes (tags only)
+
+jobs:
+  macos:
+    runs-on: macos-15  # Apple Silicon (arm64)
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          FORGE_NO_ICON_NET: "1"
+        run: |
+          python -m pip install --disable-pip-version-check -e ".[dev,desktop]"
+          python -m pytest -q
+
+      - name: Build Forge.app
+        id: build
+        run: python tools/build_macos.py
+
+      - name: Launch check
+        run: python tools/macos_check.py "${{ steps.build.outputs.app }}" --out dist/macos-check
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-macos
+          path: ${{ steps.build.outputs.zip }}
+          retention-days: 30
+
+      - name: Upload launch check
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-check
+          path: dist/macos-check
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ steps.build.outputs.zip }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          name="$(basename "$ZIP")"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::No release $tag yet — the zip is in this run's artifacts"
+            exit 0
+          fi
+          if gh release view "$tag" --json assets --jq '.assets[].name' | grep -qx "$name"; then
+            echo "::notice::$name is already attached to $tag"
+            exit 0
+          fi
+          gh release upload "$tag" "$ZIP"

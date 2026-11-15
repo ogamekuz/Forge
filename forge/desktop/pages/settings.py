@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -995,10 +996,13 @@ class SettingsPage(Page):
         s.body.addLayout(form_row(tr("Порт callback (http://localhost:PORT/callback)"), self.sso_port))
         s.body.addWidget(section(tr("Скоупы")))
         s.body.addWidget(label("\n".join(sso.get("scopes") or []), "mono", selectable=True))
-        s.body.addWidget(label(tr("Refresh-токены — в Диспетчере учётных данных Windows (keyring), отдельно для "
-                                  "каждого Client ID; не в БД и не в git. Токен EVE привязан к приложению: "
-                                  "сменишь Client ID — персонажей нужно будет добавить заново («Обзор → Добавить "
-                                  "персонажа (EVE SSO)»)."), "faint", wrap=True))
+        store = (tr("Связке ключей macOS") if sys.platform == "darwin"
+                 else tr("Диспетчере учётных данных Windows") if sys.platform == "win32"
+                 else tr("системном хранилище паролей"))
+        s.body.addWidget(label(tr("Refresh-токены — в {store} (keyring), отдельно для каждого Client ID; не в БД "
+                                  "и не в git. Токен EVE привязан к приложению: сменишь Client ID — персонажей "
+                                  "нужно будет добавить заново («Обзор → Добавить персонажа (EVE SSO)»).",
+                                  store=store), "faint", wrap=True))
         body.addWidget(s)
         p = Card(tr("Данные"), "database", "gold")
         root = Path(self.ctx.config_path).parent
@@ -1006,13 +1010,16 @@ class SettingsPage(Page):
         db = db if db.is_absolute() else root / db
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
+        reveal_tip = (tr("Показать в Finder") if sys.platform == "darwin"
+                      else tr("Открыть в Проводнике") if sys.platform == "win32"
+                      else tr("Открыть в файловом менеджере"))
         for r, (name, path) in enumerate(((tr("Настройки"), Path(self.ctx.config_path)), (tr("База"), db),
                                           (tr("Отчёты"), root / "reports"),
                                           (tr("Лог пульта"), root / "forge_desktop.log"),
                                           (tr("Состояние пульта"), root / ".forge"))):
             grid.addWidget(label(name, "label"), r, 0)
             grid.addWidget(label(str(path), "mono", selectable=True), r, 1)
-            b = button(tr("Показать"), "folder", tip=tr("Открыть в Проводнике"))
+            b = button(tr("Показать"), "folder", tip=reveal_tip)
             b.clicked.connect(lambda _=False, pth=path: self._reveal(pth))
             grid.addWidget(b, r, 2)
         grid.setColumnStretch(1, 1)
@@ -1023,11 +1030,19 @@ class SettingsPage(Page):
 
     @staticmethod
     def _reveal(path: Path):
+        """Файл — выделить в Проводнике/Finder; папку (или ещё не созданный файл) — открыть."""
         def work():
-            if path.exists() and path.is_file():
-                subprocess.Popen(["explorer", "/select,", str(path)])  # noqa: S603, S607
+            is_file = path.exists() and path.is_file()
+            folder = str(path if path.is_dir() else path.parent)
+            if sys.platform == "win32":
+                if is_file:
+                    subprocess.Popen(["explorer", "/select,", str(path)])  # noqa: S603, S607
+                else:
+                    os.startfile(folder)  # noqa: S606
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)] if is_file else ["open", folder])  # noqa: S603
             else:
-                os.startfile(str(path if path.is_dir() else path.parent))  # noqa: S606
+                subprocess.Popen(["xdg-open", folder])  # noqa: S603, S607
         run_bg(work)
 
     # --------------------------------------------------------------- сохранение

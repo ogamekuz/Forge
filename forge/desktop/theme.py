@@ -142,14 +142,20 @@ def brush_color(value: str) -> QColor:
 # Шрифты
 # ---------------------------------------------------------------------------
 
-_resolved: dict[tuple[str, ...], str] = {}
+_resolved: dict[tuple[tuple[str, ...], bool], str] = {}
 
 
-def _pick(candidates):
-    key = tuple(candidates)
+def _pick(candidates, mono=False):
+    """Первое установленное семейство из списка темы. Ни одного (шрифты темы — виндовые, а пульт
+    запущен на macOS/Linux) — системный шрифт ОС: обычный или моноширинный."""
+    key = (tuple(candidates), mono)
     if key not in _resolved:
         have = set(QFontDatabase.families())
-        _resolved[key] = next((f for f in candidates if f in have), candidates[-1])
+        found = next((f for f in candidates if f in have), None)
+        if found is None:
+            kind = QFontDatabase.SystemFont.FixedFont if mono else QFontDatabase.SystemFont.GeneralFont
+            found = QFontDatabase.systemFont(kind).family() or candidates[-1]
+        _resolved[key] = found
     return _resolved[key]
 
 
@@ -162,13 +168,13 @@ def display_family(spec=None):
 
 
 def mono_family(spec=None):
-    return _pick((spec or _active).mono_fonts)
+    return _pick((spec or _active).mono_fonts, mono=True)
 
 
 def font(px, weight=400, display=False, mono=False, spacing=None, num=False, spec=None):
     """``num`` — табличные цифры (tnum): колонки ISK не «пляшут» по ширине."""
     t = spec or _active
-    f = QFont(_pick(t.mono_fonts if mono else t.display_fonts if display else t.text_fonts))
+    f = QFont(_pick(t.mono_fonts if mono else t.display_fonts if display else t.text_fonts, mono=mono))
     f.setPixelSize(px)
     f.setWeight(QFont.Weight(weight))
     if spacing is not None:

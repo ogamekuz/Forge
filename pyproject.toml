@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge"
-version = "3.2.0"
+version = "3.2.1"
 description = "Local industry assistant for EVE Online: exact materials, real build cost, schedule, what to build"
 readme = "README.md"
 license = "MIT"
@@ -15,7 +15,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
     "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
     "Environment :: X11 Applications :: Qt",
     "Topic :: Games/Entertainment",
     "Natural Language :: Russian",

@@ -357,12 +357,15 @@ EN: dict[str, str] = {
     "Client ID приложения (developers.eveonline.com)": "Application Client ID (developers.eveonline.com)",
     "Порт callback (http://localhost:PORT/callback)": "Callback port (http://localhost:PORT/callback)",
     "Скоупы": "Scopes",
-    "Refresh-токены — в Диспетчере учётных данных Windows (keyring), отдельно для каждого Client ID; не в "
-    "БД и не в git. Токен EVE привязан к приложению: сменишь Client ID — персонажей нужно будет добавить "
-    "заново («Обзор → Добавить персонажа (EVE SSO)»).":
-        "Refresh tokens are kept in Windows Credential Manager (keyring), separately for each Client ID; "
-        "not in the DB and not in git. An EVE token is bound to the application: change the Client ID and "
-        "you'll have to add your characters again (“Overview → Add character (EVE SSO)”).",
+    "Связке ключей macOS": "the macOS Keychain",
+    "Диспетчере учётных данных Windows": "Windows Credential Manager",
+    "системном хранилище паролей": "the system password store",
+    "Refresh-токены — в {store} (keyring), отдельно для каждого Client ID; не в БД и не в git. Токен EVE "
+    "привязан к приложению: сменишь Client ID — персонажей нужно будет добавить заново («Обзор → Добавить "
+    "персонажа (EVE SSO)»).":
+        "Refresh tokens are kept in {store} (keyring), separately for each Client ID; not in the DB and "
+        "not in git. An EVE token is bound to the application: change the Client ID and you'll have to add "
+        "your characters again (“Overview → Add character (EVE SSO)”).",
     "Данные": "Data",
     "Настройки": "Settings",
     "База": "Database",
@@ -371,6 +374,8 @@ EN: dict[str, str] = {
     "Состояние пульта": "Forge state",
     "Показать": "Show",
     "Открыть в Проводнике": "Open in Explorer",
+    "Показать в Finder": "Show in Finder",
+    "Открыть в файловом менеджере": "Open in file manager",
     "forge.toml переписывается при сохранении (комментарии не сохраняются) — справочник с пояснениями: "
     "forge.example.toml.":
         "forge.toml is rewritten on save (comments are not kept) — the annotated reference is "

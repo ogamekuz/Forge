@@ -11,4 +11,4 @@
 
 # Версия Forge — здесь и в pyproject.toml (``tests/test_version.py`` следит, чтобы совпадали).
 # Пульт показывает её на вывеске (``desktop/branding.VERSION``), сборка кладёт в имя архива.
-__version__ = "3.2.0"
+__version__ = "3.2.1"

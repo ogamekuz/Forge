@@ -132,7 +132,7 @@ def sync_character_data(
                 {
                     "character_id": character_id,
                     "name": name,
-                    "refresh_token": tokens.MARKER,  # сам токен — в Credential Manager
+                    "refresh_token": tokens.MARKER,  # сам токен — в keyring (хранилище паролей ОС)
                     "scopes": " ".join(scopes),
                     "wallet_balance": float(wallet.data),
                     "updated_at": now,
